@@ -37,41 +37,23 @@ torch.set_num_threads(2)
 
 
 # load data
+# load data
 def load_data(dataset_path, flag, n_files=-1):
-    # make another variable that combines flag and subdirectory such as 3_features_raw
-    path_id = f"{flag}-"
-    if args.full_kinematics:
-        data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/data/*")
-        path_id += "7_features_raw"
-    elif args.raw_3:
-        data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features_raw/data/*")
-        path_id += "3_features_raw"
+    if args.raw:
+        if args.percent == 100:
+            data_files = glob.glob(f"{dataset_path}/raw/raw_{flag}/data/*")
+        else:
+            data_files = glob.glob(f"{dataset_path}/raw/{flag}/data/*")
     else:
-        data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features/data/*")
-        path_id += "3_features_relative"
+        if args.percent == 100:
+            data_files = glob.glob(f"{dataset_path}/{flag}_{args.percent}%/data/*")
+        else:
+            data_files = glob.glob(f"{dataset_path}/{flag}/data/*")
 
     data = []
-    for i, _ in enumerate(data_files):
-        if args.full_kinematics:
-            data.append(
-                np.load(
-                    f"{dataset_path}/{flag}/processed/7_features_raw/data/data_{i}.npy"
-                )
-            )
-        elif args.raw_3:
-            data.append(
-                torch.load(
-                    f"{dataset_path}/{flag}/processed/3_features_raw/data/data_{i}.pt"
-                ).numpy()
-            )
-        else:
-            data.append(
-                torch.load(
-                    f"{dataset_path}/{flag}/processed/3_features/data/data_{i}.pt"
-                ).numpy()
-            )
-
-        print(f"--- loaded file {i} from `{path_id}` directory")
+    for i, file in enumerate(data_files):
+        data.append(torch.load(file))
+        print(f"--- loaded file {file} from `{flag}_{args.percent}` directory")
         if n_files != -1 and i == n_files - 1:
             break
 
@@ -79,16 +61,15 @@ def load_data(dataset_path, flag, n_files=-1):
 
 
 def load_labels(dataset_path, flag, n_files=-1):
-    data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/labels/*")
+    if args.raw:
+        data_files = glob.glob(f"{dataset_path}/raw/raw_{flag}_{args.percent}%/label/*")
+    else:
+        data_files = glob.glob(f"{dataset_path}/{flag}_{args.percent}%/label/*")
 
     data = []
     for i, file in enumerate(data_files):
-        data.append(
-            np.load(
-                f"{dataset_path}/{flag}/processed/7_features_raw/labels/labels_{i}.npy"
-            )
-        )
-        print(f"--- loaded label file {i} from `{flag}` directory")
+        data.append(torch.load(file))
+        print(f"--- loaded file {file} from `{flag}_{args.percent}` directory")
         if n_files != -1 and i == n_files - 1:
             break
 
