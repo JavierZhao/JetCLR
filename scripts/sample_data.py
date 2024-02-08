@@ -41,64 +41,149 @@ def main(args):
     logger.info("making final data set from raw data")
     
     label = args.label
-    data_dir = f"/ssl-jet-vol-v2/JetClass/processed/{label}"
+    data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label}"
     data_files = glob.glob(f"{data_dir}/data/*")
     frac_lst = [1, 5, 10, 50]
+#     dataset_sizes = {"train" : 100 * 1e6, "val": 5 * 1e6, "test": 20 * 1e6}
+    total_samples_lst = [int(100 * 100000 * frac / 100) for frac in frac_lst]
     
-    for frac in frac_lst:
+    current_index = 0  # Keep track of where to insert data
+    for frac, total_samples in zip(frac_lst, total_samples_lst):
+        file_counter = 0
         print(f"Sampling {frac}% of data from `{label}` directory")
         processed_data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/data"
         processed_label_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/label"
+#         processed_data_dir = f"/ssl-jet-vol-v2/trial/raw_{label}_{frac}%/data"
+#         processed_label_dir = f"/ssl-jet-vol-v2/trial/raw_{label}_{frac}%/label"
         os.system(f"mkdir -p {processed_data_dir} {processed_label_dir}")  # -p: create parent dirs if needed, exist_ok
-
-        all_sampled_data = []
-        all_sampled_labels = []
         
+        # Assuming you know the total number of samples after sampling from all files
+        data_shape = (total_samples, 7, 128)  # Example data shape
+        label_shape = (total_samples, 10)  # Example label shape, adjust as needed
+
+        # Pre-allocate tensors
+        temp_sampled_data = torch.zeros(data_shape, dtype=torch.float32)  # Adjust dtype as needed
+        temp_sampled_labels = torch.zeros(label_shape, dtype=torch.int64)  # Adjust dtype as needed
+
         for i, file in enumerate(data_files):
-            data = torch.load(file)
+            data = torch.load(file)  # Assume shape is (N, 7, 128) for each file
             data_file_name = file.split("/")[-1].split(".")[0]
             print(f"--- loaded data file {i} {data_file_name} from `{label}` directory")
 
             label_path = modify_path(file)
-            labels = torch.load(label_path)
-            labels_file_name = label_path.split("/")[-1].split(".")[0]
-            print(f"--- loaded data file {i} {labels_file_name} from `{label}` directory")
+            labels = torch.load(label_path)  # Assume shape is (N,) for each file
 
-            # Calculate the number of samples you need
-            num_samples = int(frac/100 * data.shape[0])
-
+            # Calculate number of samples to take
+            num_samples = int(frac / 100 * data.shape[0])
             # Generate random indices
             indices = torch.randperm(data.shape[0])[:num_samples]
 
-            sampled_data = data[indices].cpu()
-            sampled_labels = labels[indices].cpu()
+            # Fill pre-allocated tensors
+            # Calculate new end index based on current batch
+            end_index = current_index + num_samples
 
-            all_sampled_data.append(sampled_data)
-            all_sampled_labels.append(sampled_labels)
+            # Check if the temp tensors can accommodate this batch; if not, save and reset
+            if end_index > temp_sampled_data.shape[0]:
+                # Save the filled portion of the tensors
+                torch.save(temp_sampled_data[:current_index], os.path.join(processed_data_dir, f"data_{file_counter}.pt"))
+                torch.save(temp_sampled_labels[:current_index], os.path.join(processed_label_dir, f"labels_{file_counter}.pt"))
+                file_counter += 1  # Increment file counter after saving
+                print(f"----finished creating {file_counter} files")
 
-            # Free up memory
-            del data, labels, sampled_data, sampled_labels
-            # torch.cuda.empty_cache()
-            if (i+1) % 100 == 0:
-                sampled_data_tensor = torch.stack(all_sampled_data)
-                sampled_labels_tensor = torch.stack(all_sampled_labels)
-                torch.save(sampled_data_tensor, osp.join(processed_data_dir, f"data{int((i+1) // 100)}.pt"))
-                torch.save(sampled_labels_tensor, osp.join(processed_label_dir, f"labels{int((i+1) // 100)}.pt"))
-                del sampled_data_tensor, sampled_labels_tensor
-                all_sampled_data, all_sampled_labels = [], []
-                print(f"--- finished creating {int((i+1) // 100)} files")
+                # Reset current index for the next batch of tensors
+                current_index = 0
+                end_index = num_samples  # As we are starting from 0 again
 
-        # sampled_data_tensor = torch.cat(all_sampled_data, dim=0)
-        # sampled_labels_tensor = torch.cat(all_sampled_labels, dim=0)
-        # sampled_data_tensor = torch.stack(all_sampled_data)
-        # sampled_labels_tensor = torch.stack(all_sampled_labels)
+                # Reset current index for the next batch of tensors, only if not at the last file
+                if i != len(data_files) - 1:
+                    print("resetting  temp storage tensors")
+                    temp_sampled_data.fill_(0)  # Resetting tensors for reuse
+                    temp_sampled_labels.fill_(0)
 
-        # torch.save(sampled_data_tensor, osp.join(processed_data_dir, "data.pt"))
-        # torch.save(sampled_labels_tensor, osp.join(processed_label_dir, "labels.pt"))
+            # Fill pre-allocated tensors with the current batch
+            temp_sampled_data[current_index:end_index] = data[indices]
+            temp_sampled_labels[current_index:end_index] = labels[indices]
+
+            current_index = end_index  # Update current index
+
+            # Condition to save at the last file
+            if i == len(data_files) - 1:
+                # Save the filled portion of the tensors
+                torch.save(temp_sampled_data[:current_index], os.path.join(processed_data_dir, f"data_{file_counter}.pt"))
+                torch.save(temp_sampled_labels[:current_index], os.path.join(processed_label_dir, f"labels_{file_counter}.pt"))
+                file_counter += 1  # Increment file counter after saving
+
+                
+
+        # Reset for the next fraction, if necessary
+        current_index = 0
+        file_counter = 0  # Reset file counter for the next fraction
+        print(f"Finished sampling and saving {frac}% of data")
+
+    
+#     for frac, total_samples in zip(frac_lst, total_samples_lst):
+#         print(f"Sampling {frac}% of data from `{label}` directory")
+# #         processed_data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/data"
+# #         processed_label_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/label"
+#         processed_data_dir = f"/ssl-jet-vol-v2/trial/raw_{label}_{frac}%/data"
+#         processed_label_dir = f"/ssl-jet-vol-v2/trial/raw_{label}_{frac}%/label"
+#         os.system(f"mkdir -p {processed_data_dir} {processed_label_dir}")  # -p: create parent dirs if needed, exist_ok
+
+# #         all_sampled_data = []
+# #         all_sampled_labels = []
+#         # Assuming you know the total number of samples after sampling from all files
+#         data_shape = (total_samples, 7, 128)  # Example data shape
+#         label_shape = (total_samples, 10)  # Example label shape, adjust as needed
+
+#         # Pre-allocate tensors
+#         all_sampled_data = torch.zeros(data_shape, dtype=torch.float32)  # Adjust dtype as needed
+#         all_sampled_labels = torch.zeros(label_shape, dtype=torch.int64)  # Adjust dtype as needed
+
+#         for i, file in enumerate(data_files):
+#             data = torch.load(file)
+#             data_file_name = file.split("/")[-1].split(".")[0]
+#             print(f"--- loaded data file {i} {data_file_name} from `{label}` directory")
+
+#             label_path = modify_path(file)
+#             labels = torch.load(label_path)
+#             labels_file_name = label_path.split("/")[-1].split(".")[0]
+#             print(f"--- loaded data file {i} {labels_file_name} from `{label}` directory")
+
+#             # Calculate the number of samples you need
+#             num_samples = int(frac/100 * data.shape[0])
+
+#             # Generate random indices
+#             indices = torch.randperm(data.shape[0])[:num_samples]
+
+#             sampled_data = data[indices].cpu()
+#             sampled_labels = labels[indices].cpu()
+
+#             all_sampled_data.append(sampled_data)
+#             all_sampled_labels.append(sampled_labels)
+
+#             # Free up memory
+#             del data, labels, sampled_data, sampled_labels
+#             # torch.cuda.empty_cache()
+#             if (i+1) % 100 == 0 or i == len(data_files) - 1:
+#                 sampled_data_tensor = torch.stack(all_sampled_data)
+#                 sampled_labels_tensor = torch.stack(all_sampled_labels)
+#                 torch.save(sampled_data_tensor, osp.join(processed_data_dir, f"data_{int((i+1) // 100)}.pt"))
+#                 torch.save(sampled_labels_tensor, osp.join(processed_label_dir, f"labels_{int((i+1) // 100)}.pt"))
+#                 del sampled_data_tensor, sampled_labels_tensor
+#                 all_sampled_data, all_sampled_labels = [], []
+#                 print(f"--- finished creating {int((i+1) // 100) + 1} files")
+
+#         # sampled_data_tensor = torch.cat(all_sampled_data, dim=0)
+#         # sampled_labels_tensor = torch.cat(all_sampled_labels, dim=0)
+#         # sampled_data_tensor = torch.stack(all_sampled_data)
+#         # sampled_labels_tensor = torch.stack(all_sampled_labels)
+
+#         # torch.save(sampled_data_tensor, osp.join(processed_data_dir, "data.pt"))
+#         # torch.save(sampled_labels_tensor, osp.join(processed_label_dir, "labels.pt"))
         
-        # del sampled_data_tensor, sampled_labels_tensor
-        # torch.cuda.empty_cache()
-        print("finished sampling and saving data")
+#         # del sampled_data_tensor, sampled_labels_tensor
+#         # torch.cuda.empty_cache()
+#         print("finished sampling and saving data")
 
 
 

@@ -106,7 +106,9 @@ def main(args):
     data_files = glob.glob(f"{data_dir}/*")
     label_orig = label.split("_")[0] # without _100M, _5M, _20M
     processed_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label_orig}"
-    os.system(f"mkdir -p {processed_dir}")  # -p: create parent dirs if needed, exist_ok
+    processed_data_dir = f"{processed_dir}/data"
+    processed_label_dir = f"{processed_dir}/label"
+    os.system(f"mkdir -p {processed_data_dir} {processed_label_dir}")  # -p: create parent dirs if needed, exist_ok
 
     for i, file in enumerate(data_files):
         tree = uproot.open(file)['tree']
@@ -115,8 +117,8 @@ def main(args):
         f_dict = build_features_and_labels(tree)
         features_tensor = torch.from_numpy(f_dict['pf_features'])
         labels_tensor = torch.from_numpy(f_dict['label'])
-        torch.save(features_tensor, osp.join(processed_dir, f"{file_name}.pt"))
-        torch.save(labels_tensor, osp.join(processed_dir, f"labels_{file_name}.pt"))
+        torch.save(features_tensor, osp.join(processed_data_dir, f"{file_name}.pt"))
+        torch.save(labels_tensor, osp.join(processed_label_dir, f"labels_{file_name}.pt"))
         print(f"--- saved data file {i} {file_name} to `{processed_dir}` directory")
 
 if __name__ == "__main__":
