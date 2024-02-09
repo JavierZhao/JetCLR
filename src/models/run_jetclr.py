@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # load custom modules required for jetCLR training
-from .modules.jet_augs import (
+from src.modules.jet_augs import (
     rotate_jets,
     distort_jets,
     rescale_pts,
@@ -25,9 +25,9 @@ from .modules.jet_augs import (
     translate_jets,
     collinear_fill_jets,
 )
-from .modules.transformer import Transformer
-from .modules.losses import contrastive_loss, align_loss, uniform_loss
-from .modules.perf_eval import get_perf_stats, linear_classifier_test
+from src.modules.transformer import Transformer
+from src.modules.losses import contrastive_loss, align_loss, uniform_loss
+from src.modules.perf_eval import get_perf_stats, linear_classifier_test
 
 # import args from extargs.py file
 # import extargs as args
@@ -520,7 +520,7 @@ def main(args):
                 val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
                 losses_e_val.append(val_loss.detach().cpu().numpy())
             net.train()
-            loss_e_val = np.mean(np.array(losses_e))
+            loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
 
         print(
