@@ -27,6 +27,7 @@ class JetClassDataset(Dataset):
         assert logfile is not None, "logfile must be specified"
 
         self.data_dir = dataset_path
+        self.label_dir = dataset_path
         self.load_labels = load_labels
         if args.raw:
             if args.percent == 100:
@@ -53,26 +54,40 @@ class JetClassDataset(Dataset):
             ]
         )
         print(f"Number of data files: {len(self.data_files)}", flush=True, file=logfile)
-        print(f"Data files: {self.data_files}", flush=True, file=logfile)
+        print(f"Data files: {[file.split('/')[-1] for file in self.data_files]}", flush=True, file=logfile)
         if self.load_labels:
             # Ensure the corresponding label files exist and are in order
-            self.label_files = [
-                os.path.join(self.label_dir, os.path.basename(f))
-                for f in self.data_files
-            ]
+#             self.label_files = [
+#                 os.path.join(self.label_dir, os.path.basename(f))
+#                 for f in self.data_files
+#             ]
+            self.label_files = sorted(
+                        [
+                            os.path.join(self.label_dir, f)
+                            for f in os.listdir(self.label_dir)
+                            if os.path.isfile(os.path.join(self.label_dir, f))
+                        ]
+                    )
             print(
                 f"Number of label files: {len(self.label_files)}",
                 flush=True,
                 file=logfile,
             )
-            print(f"Label files: {self.label_files}", flush=True, file=logfile)
+            print(f"Label files: {[file.split('/')[-1] for file in self.label_files]}", flush=True, file=logfile)
         self.transform = transform
         self.raw = args.raw
         self.percent = args.percent
 
         # Calculate total number of jets across all files
-        self.jets_per_file = 100e3  # 100k jets per file
-        self.total_jets = self.jets_per_file * len(self.data_files)
+        self.jets_per_file = int(100e3)  # 100k jets per file
+        if flag == "val" and args.percent in [1, 5]:
+            self.jets_per_file = int(50e3)  # 50k jets per file
+#         if len(self.label_files) <= 5:
+#             labels = torch.load(self.label_files[0])
+#             self.jets_per_file = labels.shape[0]
+        self.total_jets = int(self.jets_per_file * len(self.data_files))
+        print(f"jets per file: {self.jets_per_file}", flush=True, file=logfile)
+        print(f"total jets: {self.total_jets}", flush=True, file=logfile)
         self.cache = {}  # Initialize an empty cache
 
     def __len__(self):
@@ -110,9 +125,9 @@ class JetClassDataset(Dataset):
         100,000 jets.
         """
         # Calculate which file the jet is in
-        file_idx = global_idx // self.jets_per_file
+        file_idx = int(global_idx // self.jets_per_file)
 
         # Calculate the index of the jet within that file
-        jet_idx = global_idx % self.jets_per_file
+        jet_idx = int(global_idx % self.jets_per_file)
 
         return file_idx, jet_idx
