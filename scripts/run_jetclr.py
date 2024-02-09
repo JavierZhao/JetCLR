@@ -539,7 +539,7 @@ def main(args):
                 val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
                 losses_e_val.append(val_loss.detach().cpu().numpy())
             net.train()
-            loss_e_val = np.mean(np.array(losses_e))
+            loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
 
         print(
