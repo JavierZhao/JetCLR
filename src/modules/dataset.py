@@ -30,18 +30,19 @@ class JetClassDataset(Dataset):
         self.load_labels = load_labels
         if args.raw:
             if args.percent == 100:
-                self.data_dir = f"{dataset_path}/raw/raw_{flag}/data/*"
-                self.label_dir = f"{dataset_path}/raw/raw_{flag}/label/*"
+                self.data_dir = f"{dataset_path}/raw/raw_{flag}/data/"
+                self.label_dir = f"{dataset_path}/raw/raw_{flag}/label/"
             else:
-                self.data_dir = f"{dataset_path}/raw/{flag}/data/*"
-                self.label_dir = f"{dataset_path}/raw/{flag}/label/*"
+                self.data_dir = f"{dataset_path}/raw/raw_{flag}_{args.percent}%/data/"
+                self.label_dir = f"{dataset_path}/raw/raw_{flag}_{args.percent}%/label/"
         else:
             if args.percent == 100:
-                self.data_dir = f"{dataset_path}/{flag}_{args.percent}%/data/*"
-                self.label_dir = f"{dataset_path}/{flag}_{args.percent}%/label/*"
+                self.data_dir = f"{dataset_path}/{flag}/data/"
+                self.label_dir = f"{dataset_path}/{flag}/label/"
             else:
-                self.data_dir = f"{dataset_path}/{flag}/data/*"
-                self.label_dir = f"{dataset_path}/{flag}/label/*"
+                self.data_dir = f"{dataset_path}/{flag}_{args.percent}%/data/"
+                self.label_dir = f"{dataset_path}/{flag}_{args.percent}%/label/"
+                
 
         # Assuming data and label files have the same naming convention
         self.data_files = sorted(

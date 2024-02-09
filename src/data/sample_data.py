@@ -43,12 +43,13 @@ def main(args):
     label = args.label
     data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label}"
     data_files = glob.glob(f"{data_dir}/data/*")
-    frac_lst = [1, 5, 10, 50]
-#     dataset_sizes = {"train" : 100 * 1e6, "val": 5 * 1e6, "test": 20 * 1e6}
-    total_samples_lst = [int(100 * 100000 * frac / 100) for frac in frac_lst]
+#     frac_lst = [1, 5, 10, 50]
+#     total_samples = 100000 # 100k jets per file
+    frac_lst = [5]
+    total_samples = 50000
     
     current_index = 0  # Keep track of where to insert data
-    for frac, total_samples in zip(frac_lst, total_samples_lst):
+    for frac in frac_lst:
         file_counter = 0
         print(f"Sampling {frac}% of data from `{label}` directory")
         processed_data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/data"
