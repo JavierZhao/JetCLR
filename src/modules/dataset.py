@@ -28,23 +28,17 @@ class JetClassDataset(Dataset):
 
         self.data_dir = dataset_path
         self.load_labels = load_labels
-        if args.raw:
-            if args.percent == 100:
-                self.data_dir = f"{dataset_path}/raw/raw_{flag}/data/"
-                self.label_dir = f"{dataset_path}/raw/raw_{flag}/label/"
-            else:
-                self.data_dir = f"{dataset_path}/raw/raw_{flag}_{args.percent}%/data/"
-                self.label_dir = f"{dataset_path}/raw/raw_{flag}_{args.percent}%/label/"
+        if args.percent == 100:
+            self.data_dir = f"{dataset_path}/raw_{flag}/data/"
+            self.label_dir = f"{dataset_path}/raw_{flag}/label/"
         else:
-            if args.percent == 100:
-                self.data_dir = f"{dataset_path}/{flag}/data/"
-                self.label_dir = f"{dataset_path}/{flag}/label/"
-            else:
-                self.data_dir = f"{dataset_path}/{flag}_{args.percent}%/data/"
-                self.label_dir = f"{dataset_path}/{flag}_{args.percent}%/label/"
-                
+            self.data_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/data/"
+            self.label_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/label/"
+        # for testing (LCT), only use the 1% dataset
+        if flag == "test":
+            self.data_dir = f"{dataset_path}/raw_{flag}_1%/data/"
+            self.label_dir = f"{dataset_path}/raw_{flag}_1%/label/"
 
-        # Assuming data and label files have the same naming convention
         self.data_files = sorted(
             [
                 os.path.join(self.data_dir, f)
@@ -116,3 +110,69 @@ class JetClassDataset(Dataset):
         jet_idx = global_idx % self.jets_per_file
 
         return file_idx, jet_idx
+
+    def get_sample_shape(self):
+        # Load a single sample from the dataset
+        if self.load_labels:
+            sample, _ = self.__getitem__(0)
+        else:
+            sample = self.__getitem__(0)
+        # Return the shape of the sample
+        return sample.shape
+
+    def get_dataset_shape(self):
+        # Load a single sample to get its shape
+        if self.load_labels:
+            sample, _ = self.__getitem__(0)
+        else:
+            sample = self.__getitem__(0)
+
+        # Create a shape tuple that starts with self.total_jets and extends with the sample shape
+        dataset_shape = (self.total_jets,) + sample.shape
+
+        return dataset_shape
+
+    def get_labels_shape(self):
+        # Load a single sample to get its shape
+        if self.load_labels:
+            _, label = self.__getitem__(0)
+        else:
+            raise ValueError("This dataset does not contain labels")
+
+        # Create a shape tuple that starts with self.total_jets and extends with the sample shape
+        labels_shape = (self.total_jets,) + label.shape
+
+        return labels_shape
+
+    def _load_data(self):
+        """
+        Loads data from files in the specified dataset path and concatenates them along the first axis.
+        """
+        data_list = []
+        label_list = []
+        # Assuming data files are directly under self.data_path
+        for data_filename, label_file_name in zip(
+            sorted(os.listdir(self.data_dir)), sorted(os.listdir(self.label_dir))
+        ):
+            data_file_path = os.path.join(self.data_path, data_filename)
+            label_file_path = os.path.join(self.label_path, label_file_name)
+            # Load the tensor from file
+            data_tensor = torch.load(data_file_path)
+            label_tensor = torch.load(label_file_path)
+            data_list.append(data_tensor)
+            label_list.append(label_tensor)
+
+        # Concatenate all tensors along the first axis
+        entire_dataset = torch.cat(data_list, dim=0)
+        entire_labels = torch.cat(label_list, dim=0)
+        return entire_dataset, entire_labels
+
+    def fetch_entire_dataset(self):
+        """
+        Wrapper method to call load_data and potentially perform additional processing.
+        """
+        data, labels = self._load_data()
+        # Apply transformations if needed and if 'transform' is provided
+        if self.transform is not None:
+            data = self.transform(data)
+        return data, labels
