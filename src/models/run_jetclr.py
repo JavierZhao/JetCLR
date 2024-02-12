@@ -23,7 +23,6 @@ from torch.utils.data import DataLoader
 from src.modules.jet_augs import (
     rotate_jets,
     distort_jets,
-    rescale_pts,
     translate_jets,
     collinear_fill_jets,
 )
@@ -37,6 +36,7 @@ torch.set_num_threads(2)
 
 
 def augmentation(args, x_i):
+    x_i = x_i.cpu().numpy()
     # x_i has shape (batch_size, 7, n_constit)
     # dim 1 ordering: 'part_eta','part_phi','part_pt_log', 'part_e_log', 'part_logptrel', 'part_logerel','part_deltaR'
     # extract the (pT, eta, phi) features for augmentations
@@ -62,76 +62,72 @@ def augmentation(args, x_i):
         x_j = translate_jets(x_j, width=args.trsw)
         x_i = translate_jets(x_i, width=args.trsw)
     time5 = time.time()
-    if not args.full_kinematics:
-        x_i = rescale_pts(x_i)
-        x_j = rescale_pts(x_j)
-    if args.full_kinematics:
-        # recalculate the rest of the features after augmentation
-        pT_i = x_i[:, 0, :]
-        eta_i = x_i[:, 1, :]
-        phi_i = x_i[:, 2, :]
-        pT_j = x_j[:, 0, :]
-        eta_j = x_j[:, 1, :]
-        phi_j = x_j[:, 2, :]
-        # calculate the rest of the features
-        # pT
-        pT_log_i = np.where(pT_i != 0, np.log(pT_i), 0)
-        pT_log_i = np.nan_to_num(pT_log_i, nan=0.0)
-        pT_log_j = np.where(pT_j != 0, np.log(pT_j), 0)
-        pT_log_j = np.nan_to_num(pT_log_j, nan=0.0)
-        # pTrel
-        pT_sum_i = np.sum(pT_i, axis=-1, keepdims=True)
-        pT_sum_j = np.sum(pT_j, axis=-1, keepdims=True)
-        pt_rel_i = pT_i / pT_sum_i
-        pt_rel_j = pT_j / pT_sum_j
-        pt_rel_log_i = np.where(pt_rel_i != 0, np.log(pt_rel_i), 0)
-        pt_rel_log_i = np.nan_to_num(pt_rel_log_i, nan=0.0)
-        pt_rel_log_j = np.where(pt_rel_j != 0, np.log(pt_rel_j), 0)
-        pt_rel_log_j = np.nan_to_num(pt_rel_log_j, nan=0.0)
-        # E
-        E_i = pT_i * np.cosh(eta_i)
-        E_j = pT_j * np.cosh(eta_j)
-        E_log_i = np.where(E_i != 0, np.log(E_i), 0)
-        E_log_i = np.nan_to_num(E_log_i, nan=0.0)
-        E_log_j = np.where(E_j != 0, np.log(E_j), 0)
-        E_log_j = np.nan_to_num(E_log_j, nan=0.0)
-        # Erel
-        E_sum_i = np.sum(E_i, axis=-1, keepdims=True)
-        E_sum_j = np.sum(E_j, axis=-1, keepdims=True)
-        E_rel_i = E_i / E_sum_i
-        E_rel_j = E_j / E_sum_j
-        E_rel_log_i = np.where(E_rel_i != 0, np.log(E_rel_i), 0)
-        E_rel_log_i = np.nan_to_num(E_rel_log_i, nan=0.0)
-        E_rel_log_j = np.where(E_rel_j != 0, np.log(E_rel_j), 0)
-        E_rel_log_j = np.nan_to_num(E_rel_log_j, nan=0.0)
-        # deltaR
-        deltaR_i = np.sqrt(np.square(eta_i) + np.square(phi_i))
-        deltaR_j = np.sqrt(np.square(eta_j) + np.square(phi_j))
-        # stack them to obtain the final augmented data
-        x_i = np.stack(
-            [
-                eta_i,
-                phi_i,
-                pT_log_i,
-                E_log_i,
-                pt_rel_log_i,
-                E_rel_log_i,
-                deltaR_i,
-            ],
-            1,
-        )  # (batch_size, 7, n_constit)
-        x_j = np.stack(
-            [
-                eta_j,
-                phi_j,
-                pT_log_j,
-                E_log_j,
-                pt_rel_log_j,
-                E_rel_log_j,
-                deltaR_j,
-            ],
-            1,
-        )  # (batch_size, 7, n_constit)
+    # recalculate the rest of the features after augmentation
+    pT_i = x_i[:, 0, :]
+    eta_i = x_i[:, 1, :]
+    phi_i = x_i[:, 2, :]
+    pT_j = x_j[:, 0, :]
+    eta_j = x_j[:, 1, :]
+    phi_j = x_j[:, 2, :]
+    # calculate the rest of the features
+    # pT
+    pT_log_i = np.where(pT_i != 0, np.log(pT_i), 0)
+    pT_log_i = np.nan_to_num(pT_log_i, nan=0.0)
+    pT_log_j = np.where(pT_j != 0, np.log(pT_j), 0)
+    pT_log_j = np.nan_to_num(pT_log_j, nan=0.0)
+    # pTrel
+    pT_sum_i = np.sum(pT_i, axis=-1, keepdims=True)
+    pT_sum_j = np.sum(pT_j, axis=-1, keepdims=True)
+    pt_rel_i = pT_i / pT_sum_i
+    pt_rel_j = pT_j / pT_sum_j
+    pt_rel_log_i = np.where(pt_rel_i != 0, np.log(pt_rel_i), 0)
+    pt_rel_log_i = np.nan_to_num(pt_rel_log_i, nan=0.0)
+    pt_rel_log_j = np.where(pt_rel_j != 0, np.log(pt_rel_j), 0)
+    pt_rel_log_j = np.nan_to_num(pt_rel_log_j, nan=0.0)
+    # E
+    E_i = pT_i * np.cosh(eta_i)
+    E_j = pT_j * np.cosh(eta_j)
+    E_log_i = np.where(E_i != 0, np.log(E_i), 0)
+    E_log_i = np.nan_to_num(E_log_i, nan=0.0)
+    E_log_j = np.where(E_j != 0, np.log(E_j), 0)
+    E_log_j = np.nan_to_num(E_log_j, nan=0.0)
+    # Erel
+    E_sum_i = np.sum(E_i, axis=-1, keepdims=True)
+    E_sum_j = np.sum(E_j, axis=-1, keepdims=True)
+    E_rel_i = E_i / E_sum_i
+    E_rel_j = E_j / E_sum_j
+    E_rel_log_i = np.where(E_rel_i != 0, np.log(E_rel_i), 0)
+    E_rel_log_i = np.nan_to_num(E_rel_log_i, nan=0.0)
+    E_rel_log_j = np.where(E_rel_j != 0, np.log(E_rel_j), 0)
+    E_rel_log_j = np.nan_to_num(E_rel_log_j, nan=0.0)
+    # deltaR
+    deltaR_i = np.sqrt(np.square(eta_i) + np.square(phi_i))
+    deltaR_j = np.sqrt(np.square(eta_j) + np.square(phi_j))
+    # stack them to obtain the final augmented data
+    x_i = np.stack(
+        [
+            eta_i,
+            phi_i,
+            pT_log_i,
+            E_log_i,
+            pt_rel_log_i,
+            E_rel_log_i,
+            deltaR_i,
+        ],
+        1,
+    )  # (batch_size, 7, n_constit)
+    x_j = np.stack(
+        [
+            eta_j,
+            phi_j,
+            pT_log_j,
+            E_log_j,
+            pt_rel_log_j,
+            E_rel_log_j,
+            deltaR_j,
+        ],
+        1,
+    )  # (batch_size, 7, n_constit)
     x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
     x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
     times = [time1, time2, time3, time4, time5]
@@ -281,10 +277,11 @@ def main(args):
     print("pT smearing clip parameter: " + str(args.ptcm), flush=True, file=logfile)
     print("translations: " + str(args.trs), flush=True, file=logfile)
     print("translations width: " + str(args.trsw), flush=True, file=logfile)
-    if args.full_kinematics:
-        print("Number of input features per particle: 7", flush=True, file=logfile)
-    else:
-        print("Number of input features per particle: 3", flush=True, file=logfile)
+    print(
+        "Number of input features per particle: " + str(input_dim),
+        flush=True,
+        file=logfile,
+    )
     print("---------------", flush=True, file=logfile)
 
     # initialise the network
@@ -520,91 +517,91 @@ def main(args):
             )
 
         # run a short LCT
-        if epoch % 10 == 0:
-            print("--- LCT ----", flush=True, file=logfile)
-            # get the validation reps
-            with torch.no_grad():
-                net.eval()
-                vl_reps_1 = (
-                    net.forward_batchwise(
-                        test_dat_1.transpose(1, 2),
-                        args.batch_size,
-                        use_mask=args.mask,
-                        use_continuous_mask=args.cmask,
-                    )
-                    .detach()
-                    .cpu()
-                    .numpy()
-                )
-                vl_reps_2 = (
-                    net.forward_batchwise(
-                        test_dat_2.transpose(1, 2),
-                        args.batch_size,
-                        use_mask=args.mask,
-                        use_continuous_mask=args.cmask,
-                    )
-                    .detach()
-                    .cpu()
-                    .numpy()
-                )
-                net.train()
-            # running the LCT on each rep layer
-            auc_list = []
-            imtafe_list = []
-            # loop through every representation layer
-            for i in range(vl_reps_1.shape[1]):
-                # just want to use the 0th rep (i.e. directly from the transformer) for now
-                if i == 1:
-                    vl0_test = time.time()
-                    (
-                        out_dat_vl,
-                        out_lbs_vl,
-                        losses_vl,
-                        _,
-                    ) = binary_linear_classifier_test(
-                        linear_input_size,
-                        linear_batch_size,
-                        linear_n_epochs,
-                        "adam",
-                        linear_learning_rate,
-                        vl_reps_1[:, i, :],
-                        test_lab_1,
-                        vl_reps_2[:, i, :],
-                        test_lab_2,
-                        logfile=logfile,
-                    )
-                    auc, imtafe = get_perf_stats(out_lbs_vl, out_dat_vl)
-                    auc_list.append(auc)
-                    imtafe_list.append(imtafe)
-                    vl1_test = time.time()
-                    print(
-                        "LCT layer "
-                        + str(i)
-                        + "- time taken: "
-                        + str(np.round(vl1_test - vl0_test, 2)),
-                        flush=True,
-                        file=logfile,
-                    )
-                    print(
-                        "auc: "
-                        + str(np.round(auc, 4))
-                        + ", imtafe: "
-                        + str(round(imtafe, 1)),
-                        flush=True,
-                        file=logfile,
-                    )
-                    np.save(
-                        expt_dir
-                        + "lct_ep"
-                        + str(epoch)
-                        + "_r"
-                        + str(i)
-                        + "_losses.npy",
-                        losses_vl,
-                    )
-            auc_epochs.append(auc_list)
-            imtafe_epochs.append(imtafe_list)
-            print("---- --- ----", flush=True, file=logfile)
+        # if epoch % 10 == 0:
+        #     print("--- LCT ----", flush=True, file=logfile)
+        #     # get the validation reps
+        #     with torch.no_grad():
+        #         net.eval()
+        #         vl_reps_1 = (
+        #             net.forward_batchwise(
+        #                 test_dat_1.transpose(1, 2),
+        #                 args.batch_size,
+        #                 use_mask=args.mask,
+        #                 use_continuous_mask=args.cmask,
+        #             )
+        #             .detach()
+        #             .cpu()
+        #             .numpy()
+        #         )
+        #         vl_reps_2 = (
+        #             net.forward_batchwise(
+        #                 test_dat_2.transpose(1, 2),
+        #                 args.batch_size,
+        #                 use_mask=args.mask,
+        #                 use_continuous_mask=args.cmask,
+        #             )
+        #             .detach()
+        #             .cpu()
+        #             .numpy()
+        #         )
+        #         net.train()
+        #     # running the LCT on each rep layer
+        #     auc_list = []
+        #     imtafe_list = []
+        #     # loop through every representation layer
+        #     for i in range(vl_reps_1.shape[1]):
+        #         # just want to use the 0th rep (i.e. directly from the transformer) for now
+        #         if i == 1:
+        #             vl0_test = time.time()
+        #             (
+        #                 out_dat_vl,
+        #                 out_lbs_vl,
+        #                 losses_vl,
+        #                 _,
+        #             ) = binary_linear_classifier_test(
+        #                 linear_input_size,
+        #                 linear_batch_size,
+        #                 linear_n_epochs,
+        #                 "adam",
+        #                 linear_learning_rate,
+        #                 vl_reps_1[:, i, :],
+        #                 test_lab_1,
+        #                 vl_reps_2[:, i, :],
+        #                 test_lab_2,
+        #                 logfile=logfile,
+        #             )
+        #             auc, imtafe = get_perf_stats(out_lbs_vl, out_dat_vl)
+        #             auc_list.append(auc)
+        #             imtafe_list.append(imtafe)
+        #             vl1_test = time.time()
+        #             print(
+        #                 "LCT layer "
+        #                 + str(i)
+        #                 + "- time taken: "
+        #                 + str(np.round(vl1_test - vl0_test, 2)),
+        #                 flush=True,
+        #                 file=logfile,
+        #             )
+        #             print(
+        #                 "auc: "
+        #                 + str(np.round(auc, 4))
+        #                 + ", imtafe: "
+        #                 + str(round(imtafe, 1)),
+        #                 flush=True,
+        #                 file=logfile,
+        #             )
+        #             np.save(
+        #                 expt_dir
+        #                 + "lct_ep"
+        #                 + str(epoch)
+        #                 + "_r"
+        #                 + str(i)
+        #                 + "_losses.npy",
+        #                 losses_vl,
+        #             )
+        #     auc_epochs.append(auc_list)
+        #     imtafe_epochs.append(imtafe_list)
+        #     print("---- --- ----", flush=True, file=logfile)
 
         # saving out training stats
         if epoch % 10 == 0:
@@ -642,78 +639,78 @@ def main(args):
     print("saving out final jetCLR model", flush=True, file=logfile)
     torch.save(net.state_dict(), expt_dir + "final_model.pt")
 
-    print("starting the final LCT run", flush=True, file=logfile)
-    print("............................", flush=True, file=logfile)
-    with torch.no_grad():
-        net.eval()
-        vl_reps_1 = (
-            net.forward_batchwise(
-                test_dat_1.transpose(1, 2),
-                args.batch_size,
-                use_mask=args.mask,
-                use_continuous_mask=args.cmask,
-            )
-            .detach()
-            .cpu()
-            .numpy()
-        )
-        vl_reps_2 = (
-            net.forward_batchwise(
-                test_dat_2.transpose(1, 2),
-                args.batch_size,
-                use_mask=args.mask,
-                use_continuous_mask=args.cmask,
-            )
-            .detach()
-            .cpu()
-            .numpy()
-        )
-        net.train()
+    # print("starting the final LCT run", flush=True, file=logfile)
+    # print("............................", flush=True, file=logfile)
+    # with torch.no_grad():
+    #     net.eval()
+    #     vl_reps_1 = (
+    #         net.forward_batchwise(
+    #             test_dat_1.transpose(1, 2),
+    #             args.batch_size,
+    #             use_mask=args.mask,
+    #             use_continuous_mask=args.cmask,
+    #         )
+    #         .detach()
+    #         .cpu()
+    #         .numpy()
+    #     )
+    #     vl_reps_2 = (
+    #         net.forward_batchwise(
+    #             test_dat_2.transpose(1, 2),
+    #             args.batch_size,
+    #             use_mask=args.mask,
+    #             use_continuous_mask=args.cmask,
+    #         )
+    #         .detach()
+    #         .cpu()
+    #         .numpy()
+    #     )
+    #     net.train()
 
-    # final LCT for each rep layer
-    for i in range(vl_reps_1.shape[1]):
-        t3 = time.time()
-        out_dat_f, out_lbs_f, losses_f, val_losses_f = linear_classifier_test(
-            linear_input_size,
-            linear_batch_size,
-            linear_n_epochs,
-            "adam",
-            linear_learning_rate,
-            vl_reps_1[:, i, :],
-            test_lab_1,
-            vl_reps_2[:, i, :],
-            test_lab_2,
-            logfile=logfile,
-        )
-        auc, imtafe = get_perf_stats(out_lbs_f, out_dat_f)
-        ep = 0
-        step_size = 25
-        for lss, val_lss in zip(losses_f[::step_size], val_losses_f):
-            print(
-                f"(rep layer {i}) epoch: "
-                + str(ep)
-                + ", loss: "
-                + str(lss)
-                + ", val loss: "
-                + str(val_lss),
-                flush=True,
-            )
-            ep += step_size
-        print(f"(rep layer {i}) auc: " + str(round(auc, 4)), flush=True, file=logfile)
-        print(
-            f"(rep layer {i}) imtafe: " + str(round(imtafe, 1)),
-            flush=True,
-            file=logfile,
-        )
-        t4 = time.time()
-        np.save(expt_dir + f"linear_losses_{i}.npy", losses_f)
-        np.save(expt_dir + f"test_linear_cl_{i}.npy", out_dat_f)
+    # # final LCT for each rep layer
+    # for i in range(vl_reps_1.shape[1]):
+    #     t3 = time.time()
+    #     out_dat_f, out_lbs_f, losses_f, val_losses_f = linear_classifier_test(
+    #         linear_input_size,
+    #         linear_batch_size,
+    #         linear_n_epochs,
+    #         "adam",
+    #         linear_learning_rate,
+    #         vl_reps_1[:, i, :],
+    #         test_lab_1,
+    #         vl_reps_2[:, i, :],
+    #         test_lab_2,
+    #         logfile=logfile,
+    #     )
+    #     auc, imtafe = get_perf_stats(out_lbs_f, out_dat_f)
+    #     ep = 0
+    #     step_size = 25
+    #     for lss, val_lss in zip(losses_f[::step_size], val_losses_f):
+    #         print(
+    #             f"(rep layer {i}) epoch: "
+    #             + str(ep)
+    #             + ", loss: "
+    #             + str(lss)
+    #             + ", val loss: "
+    #             + str(val_lss),
+    #             flush=True,
+    #         )
+    #         ep += step_size
+    #     print(f"(rep layer {i}) auc: " + str(round(auc, 4)), flush=True, file=logfile)
+    #     print(
+    #         f"(rep layer {i}) imtafe: " + str(round(imtafe, 1)),
+    #         flush=True,
+    #         file=logfile,
+    #     )
+    #     t4 = time.time()
+    #     np.save(expt_dir + f"linear_losses_{i}.npy", losses_f)
+    #     np.save(expt_dir + f"test_linear_cl_{i}.npy", out_dat_f)
 
-    print(
-        "final LCT  done and output saved, time taken: " + str(np.round(t4 - t3, 2)),
-        flush=True,
-        file=logfile,
-    )
+    # print(
+    #     "final LCT  done and output saved, time taken: " + str(np.round(t4 - t3, 2)),
+    #     flush=True,
+    #     file=logfile,
+    # )
     print("............................", flush=True, file=logfile)
 
     t5 = time.time()
@@ -755,21 +752,6 @@ if __name__ == "__main__":
         dest="device",
         default="cuda",
         help="device to train on",
-    )
-    parser.add_argument(
-        "--dataset-path",
-        type=str,
-        action="store",
-        default="/ssl-jet-vol-v2/toptagging/processed",
-        help="Input directory with the dataset",
-    )
-    parser.add_argument(
-        "--num-files",
-        type=int,
-        action="store",
-        dest="num_files",
-        default=12,
-        help="number of files for training",
     )
     parser.add_argument(
         "--model-dim",
@@ -826,13 +808,6 @@ if __name__ == "__main__":
         dest="temperature",
         default=0.10,
         help="temperature hyperparameter for contrastive loss",
-    )
-    parser.add_argument(
-        "--shared",
-        type=bool,
-        action="store",
-        default=True,
-        help="share parameters of backbone",
     )
     parser.add_argument(
         "--mask",
@@ -925,20 +900,6 @@ if __name__ == "__main__":
         dest="trsw",
         default=1.0,
         help="width param in translate_jets",
-    )
-    parser.add_argument(
-        "--full-kinematics",
-        type=int,
-        action="store",
-        dest="full_kinematics",
-        help="use the full 7 kinematic features instead of just 3",
-    )
-    parser.add_argument(
-        "--raw-3",
-        type=int,
-        action="store",
-        dest="raw_3",
-        help="use the 3 raw features",
     )
 
     args = parser.parse_args()
