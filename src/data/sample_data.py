@@ -47,7 +47,8 @@ def main(args):
     label = args.label
     data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label}"
     data_files = glob.glob(f"{data_dir}/data/*")
-    frac_lst = [1, 5, 10, 50]
+    # frac_lst = [1, 5, 10, 50]
+    frac_lst = [50]
     total_samples = 100000  # 100k jets per file
 
     current_index = 0  # Keep track of where to insert data
@@ -55,10 +56,10 @@ def main(args):
         file_counter = 0
         print(f"Sampling {frac}% of data from `{label}` directory")
         processed_data_dir = (
-            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/data"
+            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%_2/data"
         )
         processed_label_dir = (
-            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%/label"
+            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%_2/label"
         )
         os.system(
             f"mkdir -p {processed_data_dir} {processed_label_dir}"
