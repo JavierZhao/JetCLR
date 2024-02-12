@@ -48,7 +48,7 @@ def main(args):
     data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label}"
     data_files = glob.glob(f"{data_dir}/data/*")
     # frac_lst = [1, 5, 10, 50]
-    frac_lst = [50]
+    frac_lst = [1]
     total_samples = 100000  # 100k jets per file
 
     current_index = 0  # Keep track of where to insert data
