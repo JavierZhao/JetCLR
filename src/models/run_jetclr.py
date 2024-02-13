@@ -2,6 +2,7 @@
 
 # load standard python modules
 import sys
+sys.path.insert(0, '../src')
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -212,22 +213,22 @@ def main(args):
 
     # print data dimensions
     print(
-        "Training data shape: " + str(train_dataset.get_dataset_shape),
+        "Training data shape: " + str(train_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
     print(
-        "Validation data shape: " + str(val_dataset.get_dataset_shape),
+        "Validation data shape: " + str(val_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
     print(
-        "Testing data shape: " + str(test_dataset.get_dataset_shape),
+        "Testing data shape: " + str(test_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
     print(
-        "Testing labels shape: " + str(test_dataset.get_labels_shape),
+        "Testing labels shape: " + str(test_dataset.get_labels_shape()),
         flush=True,
         file=logfile,
     )
@@ -370,7 +371,7 @@ def main(args):
         )
 
         net.train()
-        pbar_t = tqdm.tqdm(train_loader, total=iters, desc="Training")
+        pbar_t = tqdm.tqdm(train_loader, total=int(len(train_dataset) / args.batch_size), desc="Training")
         for _, batch in enumerate(pbar_t):
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
