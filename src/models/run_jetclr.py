@@ -147,6 +147,8 @@ def main(args):
     # initialise logfile
     logfile = open(args.logfile, "a")
     print("logfile initialised", file=logfile, flush=True)
+    # print number of workers
+    print("number of workers: " + str(args.n_workers), file=logfile, flush=True)
 
     # define the global base device
     world_size = torch.cuda.device_count()
