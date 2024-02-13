@@ -2,7 +2,8 @@
 
 # load standard python modules
 import sys
-sys.path.insert(0, '../src')
+
+sys.path.insert(0, "../src")
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -338,6 +339,24 @@ def main(args):
         iters = int(len(train_dataset) / args.batch_size)
         print("number of iterations per epoch: " + str(iters), flush=True, file=logfile)
 
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+
     # the loop
     for epoch in range(args.n_epochs):
         # initialise timing stats
@@ -361,17 +380,13 @@ def main(args):
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True,
-            prefetch_factor=2,
-        )
 
         net.train()
-        pbar_t = tqdm.tqdm(train_loader, total=int(len(train_dataset) / args.batch_size), desc="Training")
+        pbar_t = tqdm.tqdm(
+            train_loader,
+            total=int(len(train_dataset) / args.batch_size),
+            desc="Training",
+        )
         for _, batch in enumerate(pbar_t):
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
@@ -425,14 +440,7 @@ def main(args):
         te1 = time.time()
 
         # calculate validation loss at the end of the epoch
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True,
-            prefetch_factor=2,
-        )
+
         with torch.no_grad():
             net.eval()
             pbar_v = tqdm.tqdm(
@@ -745,6 +753,14 @@ if __name__ == "__main__":
         dest="percent",
         default=1,
         help="percentage of data to use for training",
+    )
+    parser.add_argument(
+        "--n-workers",
+        type=int,
+        action="store",
+        dest="n_workers",
+        default=2,
+        help="number of workers for data loading",
     )
     parser.add_argument(
         "--device",
