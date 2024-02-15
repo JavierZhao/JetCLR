@@ -623,6 +623,7 @@ def main(args):
             np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
             np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
             np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+            np.save(expt_dir + "val_losses.npy", losses_val)
             tds1 = time.time()
             print(
                 f"time taken to save data: {round( tds1-tds0, 1 )}s",
@@ -645,6 +646,8 @@ def main(args):
     np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
     np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
     np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+    # save validation losses
+    np.save(expt_dir + "val_losses.npy", losses_val)
 
     # save out final trained model
     print("saving out final jetCLR model", flush=True, file=logfile)
