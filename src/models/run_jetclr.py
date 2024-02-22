@@ -344,19 +344,19 @@ def main(args):
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=2,
+        prefetch_factor=4,
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=2,
+        prefetch_factor=4,
     )
 
     # the loop
