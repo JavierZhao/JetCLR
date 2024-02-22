@@ -344,7 +344,7 @@ def main(args):
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=args.n_workers,
         pin_memory=True,
         prefetch_factor=2,
@@ -353,7 +353,7 @@ def main(args):
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=args.n_workers,
         pin_memory=True,
         prefetch_factor=2,
