@@ -347,7 +347,7 @@ def main(args):
         shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=4,
+        prefetch_factor=2,
     )
 
     val_loader = DataLoader(
@@ -356,7 +356,7 @@ def main(args):
         shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=4,
+        prefetch_factor=2,
     )
 
     # the loop
