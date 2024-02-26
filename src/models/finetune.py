@@ -120,7 +120,7 @@ def main(args):
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
     args.logfile = (
-        f"/ssl-jet-vol-v2/JetCLR/logs/finetune/zz-finetune-{args.label}-log.txt"
+        f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{args.label}-log.txt"
     )
     args.nconstit = 50
     args.n_heads = 4
@@ -348,8 +348,6 @@ def main(args):
     l_val_best = 99999
     acc_val_best = 0
 
-
-
     softmax = torch.nn.Softmax(dim=1)
     loss_train_all = []
     loss_val_all = []
@@ -414,7 +412,9 @@ def main(args):
             loss_val_all.append(loss_e_val)
 
         te1 = time.time()
-        print(f"validation done in {round(te1-te0, 1)} seconds", flush=True, file=logfile)
+        print(
+            f"validation done in {round(te1-te0, 1)} seconds", flush=True, file=logfile
+        )
 
         print(
             "epoch: "
@@ -430,7 +430,7 @@ def main(args):
         # get the predicted labels and true labels
         predicted = np.concatenate(predicted_e)
         target = np.concatenate(correct_e)
-        
+
         # get the accuracy
         accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
         print(
@@ -439,7 +439,7 @@ def main(args):
             file=logfile,
         )
         acc_val_all.append(accuracy)
-        
+
         # save the latest model
         if args.finetune:
             torch.save(net.state_dict(), expt_dir + "simclr_finetune_last" + ".pt")
@@ -450,8 +450,12 @@ def main(args):
             print("new lowest val loss", flush=True, file=logfile)
             l_val_best = loss_val_all[-1]
             if args.finetune:
-                torch.save(net.state_dict(), expt_dir + "simclr_finetune_best_loss" + ".pt")
-            torch.save(proj.state_dict(), expt_dir + "projector_finetune_best_loss" + ".pt")
+                torch.save(
+                    net.state_dict(), expt_dir + "simclr_finetune_best_loss" + ".pt"
+                )
+            torch.save(
+                proj.state_dict(), expt_dir + "projector_finetune_best_loss" + ".pt"
+            )
             np.save(
                 f"{expt_dir}validation_target_vals_loss.npy",
                 target,
@@ -465,8 +469,12 @@ def main(args):
             print("new highest val accuracy", flush=True, file=logfile)
             acc_val_best = acc_val_all[-1]
             if args.finetune:
-                torch.save(net.state_dict(), expt_dir + "simclr_finetune_best_acc" + ".pt")
-            torch.save(proj.state_dict(), expt_dir + "projector_finetune_best_acc" + ".pt")
+                torch.save(
+                    net.state_dict(), expt_dir + "simclr_finetune_best_acc" + ".pt"
+                )
+            torch.save(
+                proj.state_dict(), expt_dir + "projector_finetune_best_acc" + ".pt"
+            )
             np.save(
                 f"{expt_dir}validation_target_vals_acc.npy",
                 target,
@@ -489,8 +497,7 @@ def main(args):
             f"{expt_dir}acc_val.npy",
             np.array(acc_val_all),
         )
-            
-        
+
     # Training done
     print("Training done", flush=True, file=logfile)
 
