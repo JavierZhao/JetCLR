@@ -23,6 +23,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import torch.optim as optim
 
+from sklearn.metrics import accuracy_score
+
 # load custom modules required for jetCLR training
 from src.modules.jet_augs import (
     rotate_jets,
@@ -145,7 +147,7 @@ def main(args):
     # set up results directory
     base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
     expt_tag = args.label
-    expt_dir = base_dir + "finetune/" + expt_tag + "/"
+    expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
     # check if experiment already exists and is not empty
 
@@ -344,14 +346,14 @@ def main(args):
     loss = nn.CrossEntropyLoss(reduction="mean")
 
     l_val_best = 99999
+    acc_val_best = 0
 
-    from sklearn.metrics import accuracy_score
+
 
     softmax = torch.nn.Softmax(dim=1)
-    import time
-
     loss_train_all = []
     loss_val_all = []
+    acc_val_all = []
 
     for epoch in range(args.n_epochs):
         # re-batch the data on each epoch
@@ -371,13 +373,15 @@ def main(args):
         for i, indices in enumerate(indices_list):
             net.optimizer.zero_grad()
             x = tr_dat[indices, :, :]
+            x = torch.Tensor(x).transpose(1, 2).to(args.device)
             y = tr_lab[indices]
+            y = torch.Tensor(y).to(args.device)
             if args.finetune:
                 net.train()
             proj.train()
             reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
             out = proj(reps)
-            batch_loss = loss(out, y).to(device)
+            batch_loss = loss(out, y.long()).to(device)
             batch_loss.backward()
             optimizer.step()
             batch_loss = batch_loss.detach().cpu().item()
@@ -393,22 +397,24 @@ def main(args):
         with torch.no_grad():
             for i, indices in enumerate(indices_list_val):
                 x = vl_dat[indices, :, :]
+                x = torch.Tensor(x).transpose(1, 2).to(args.device)
                 y = vl_lab[indices]
+                y = torch.Tensor(y).to(args.device)
                 if args.finetune:
                     net.train()
                 proj.train()
                 reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
                 out = proj(reps)
-                batch_loss = loss(out, y).detach().cpu().item()
+                batch_loss = loss(out, y.long()).detach().cpu().item()
                 losses_e_val.append(batch_loss)
 
                 predicted_e.append(softmax(out).cpu().data.numpy())
-                correct_e.append(y)
+                correct_e.append(y.cpu().data)
             loss_e_val = np.mean(np.array(losses_e_val))
             loss_val_all.append(loss_e_val)
 
         te1 = time.time()
-        print(f"validation done in {te1-te0} seconds", flush=True, file=logfile)
+        print(f"validation done in {round(te1-te0, 1)} seconds", flush=True, file=logfile)
 
         print(
             "epoch: "
@@ -424,43 +430,69 @@ def main(args):
         # get the predicted labels and true labels
         predicted = np.concatenate(predicted_e)
         target = np.concatenate(correct_e)
+        
         # get the accuracy
-        accuracy = accuracy_score(target, predicted[:, 0] > 0.5)
+        accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
         print(
             "epoch: " + str(epoch) + ", accuracy: " + str(round(accuracy, 5)),
             flush=True,
             file=logfile,
         )
+        acc_val_all.append(accuracy)
+        
         # save the latest model
         if args.finetune:
             torch.save(net.state_dict(), expt_dir + "simclr_finetune_last" + ".pt")
         torch.save(proj.state_dict(), expt_dir + "projector_finetune_last" + ".pt")
 
-        # save the best model
+        # save the model if lowest val loss is achieved
         if loss_val_all[-1] < l_val_best:
+            print("new lowest val loss", flush=True, file=logfile)
             l_val_best = loss_val_all[-1]
             if args.finetune:
-                torch.save(net.state_dict(), expt_dir + "simclr_finetune_best" + ".pt")
-            torch.save(proj.state_dict(), expt_dir + "projector_finetune_best" + ".pt")
+                torch.save(net.state_dict(), expt_dir + "simclr_finetune_best_loss" + ".pt")
+            torch.save(proj.state_dict(), expt_dir + "projector_finetune_best_loss" + ".pt")
             np.save(
-                f"{expt_dir}validation_target_vals.npy",
+                f"{expt_dir}validation_target_vals_loss.npy",
                 target,
             )
             np.save(
-                f"{expt_dir}validation_predicted_vals.npy",
+                f"{expt_dir}validation_predicted_vals_loss.npy",
                 predicted,
             )
+        # also save the model if highest val accuracy is achieved
+        if acc_val_all[-1] > acc_val_best:
+            print("new highest val accuracy", flush=True, file=logfile)
+            acc_val_best = acc_val_all[-1]
+            if args.finetune:
+                torch.save(net.state_dict(), expt_dir + "simclr_finetune_best_acc" + ".pt")
+            torch.save(proj.state_dict(), expt_dir + "projector_finetune_best_acc" + ".pt")
+            np.save(
+                f"{expt_dir}validation_target_vals_acc.npy",
+                target,
+            )
+            np.save(
+                f"{expt_dir}validation_predicted_vals_acc.npy",
+                predicted,
+            )
+
+        # save all losses and accuracies
+        np.save(
+            f"{expt_dir}loss_train.npy",
+            np.array(loss_train_all),
+        )
+        np.save(
+            f"{expt_dir}loss_val.npy",
+            np.array(loss_val_all),
+        )
+        np.save(
+            f"{expt_dir}acc_val.npy",
+            np.array(acc_val_all),
+        )
+            
+        
     # Training done
     print("Training done", flush=True, file=logfile)
-    # save all losses
-    np.save(
-        f"{expt_dir}loss_train_all.npy",
-        np.array(loss_train_all),
-    )
-    np.save(
-        f"{expt_dir}loss_val_all.npy",
-        np.array(loss_val_all),
-    )
 
 
 if __name__ == "__main__":

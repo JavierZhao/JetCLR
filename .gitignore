@@ -4,7 +4,7 @@
 # Ignore all files in specific directories
 __pycache__/
 logs/
-models/
+
 notebooks/
 plots/
 scripts/
