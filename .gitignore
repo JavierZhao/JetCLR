@@ -8,12 +8,7 @@ models/
 notebooks/
 plots/
 scripts/
-src/eval/.ipynb_checkpoints/
-src/eval/__pycache__/
-src/models/__pycache__/
-src/modules/.ipynb_checkpoints/
-src/modules/__pycache__/
-src/modules/dataset/__pycache__/
+
 
 # To ignore all Jupyter notebook checkpoints in any subdirectory
 **/.ipynb_checkpoints/
