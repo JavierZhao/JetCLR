@@ -359,6 +359,7 @@ def main(args):
         prefetch_factor=2,
     )
 
+    l_val_best = 1000000  # initialise the best validation loss
     # the loop
     for epoch in range(args.n_epochs):
         # initialise timing stats
@@ -399,18 +400,17 @@ def main(args):
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
             time7 = time.time()
             # calculate the alignment and uniformity loss for each batch
-            if epoch % 10 == 0:
-                loss_align = align_loss(z_i, z_j)
-                loss_uniform_zi = uniform_loss(z_i)
-                loss_uniform_zj = uniform_loss(z_j)
-                loss_align_e.append(loss_align.detach().cpu().numpy())
-                loss_uniform_e.append(
-                    (
-                        loss_uniform_zi.detach().cpu().numpy()
-                        + loss_uniform_zj.detach().cpu().numpy()
-                    )
-                    / 2
+            loss_align = align_loss(z_i, z_j)
+            loss_uniform_zi = uniform_loss(z_i)
+            loss_uniform_zj = uniform_loss(z_j)
+            loss_align_e.append(loss_align.detach().cpu().numpy())
+            loss_uniform_e.append(
+                (
+                    loss_uniform_zi.detach().cpu().numpy()
+                    + loss_uniform_zj.detach().cpu().numpy()
                 )
+                / 2
+            )
             time8 = time.time()
 
             # compute the loss, back-propagate, and update scheduler if required
@@ -474,6 +474,31 @@ def main(args):
             file=logfile,
         )
 
+        # save the latest model
+        torch.save(net.state_dict(), expt_dir + "model_last.pt")
+
+        # save the model if the validation loss is the lowest
+        if losses_val[-1] < l_val_best:
+            l_val_best = losses_val[-1]
+            print(
+                "saving out new best jetCLR model, validation loss: " + str(l_val_best),
+                flush=True,
+                file=logfile,
+            )
+            torch.save(net.state_dict(), expt_dir + "model_best.pt")
+
+        # summarise alignment and uniformity stats
+        loss_align_epochs.append(np.mean(np.array(loss_align_e)))
+        loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
+        print(
+            "alignment: "
+            + str(loss_align_epochs[-1])
+            + ", uniformity: "
+            + str(loss_uniform_epochs[-1]),
+            flush=True,
+            file=logfile,
+        )
+
         if args.opt == "sgdca" or args.opt == "sgdslr":
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
         print(
@@ -494,35 +519,10 @@ def main(args):
                 file=logfile,
             )
 
-        # summarise alignment and uniformity stats
-        if epoch % 10 == 0:
-            loss_align_epochs.append(np.mean(np.array(loss_align_e)))
-            loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
-            print(
-                "alignment: "
-                + str(loss_align_epochs[-1])
-                + ", uniformity: "
-                + str(loss_uniform_epochs[-1]),
-                flush=True,
-                file=logfile,
-            )
-
         # check number of threads being used
         if epoch % 10 == 0:
             print(
                 "num threads in use: " + str(torch.get_num_threads()),
-                flush=True,
-                file=logfile,
-            )
-
-        # saving the model
-        if epoch % 10 == 0:
-            print("saving out jetCLR model", flush=True, file=logfile)
-            tms0 = time.time()
-            torch.save(net.state_dict(), expt_dir + "model_ep" + str(epoch) + ".pt")
-            tms1 = time.time()
-            print(
-                f"time taken to save model: {round( tms1-tms0, 1 )}s",
                 flush=True,
                 file=logfile,
             )
@@ -615,21 +615,12 @@ def main(args):
         #     print("---- --- ----", flush=True, file=logfile)
 
         # saving out training stats
-        if epoch % 10 == 0:
-            print("saving out data/results", flush=True, file=logfile)
-            tds0 = time.time()
-            np.save(expt_dir + "clr_losses.npy", losses)
-            np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
-            np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
-            np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
-            np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
-            np.save(expt_dir + "val_losses.npy", losses_val)
-            tds1 = time.time()
-            print(
-                f"time taken to save data: {round( tds1-tds0, 1 )}s",
-                flush=True,
-                file=logfile,
-            )
+        np.save(expt_dir + "clr_losses.npy", losses)
+        np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
+        np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
+        np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
+        np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+        np.save(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
 
