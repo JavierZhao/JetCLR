@@ -29,15 +29,17 @@ class JetClassDataset(Dataset):
         self.data_dir = dataset_path
         self.load_labels = load_labels
         if args.percent == 100:
-            self.data_dir = f"{dataset_path}/raw_{flag}/data/"
-            self.label_dir = f"{dataset_path}/raw_{flag}/label/"
+            self.data_dir = f"{dataset_path}/raw_{flag}/shuffled/data/"
+            self.label_dir = f"{dataset_path}/raw_{flag}/shuffled/label/"
         else:
-            self.data_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/data/"
-            self.label_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/label/"
+            self.data_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/shuffled/data/"
+            self.label_dir = (
+                f"{dataset_path}/raw_{flag}_{args.percent}%/shuffled/label/"
+            )
         # for testing (LCT), only use the 1% dataset
         if flag == "test":
-            self.data_dir = f"{dataset_path}/raw_{flag}_1%/data/"
-            self.label_dir = f"{dataset_path}/raw_{flag}_1%/label/"
+            self.data_dir = f"{dataset_path}/raw_{flag}_1%/shuffled/data/"
+            self.label_dir = f"{dataset_path}/raw_{flag}_1%/shuffled/label/"
 
         # Assuming data and label files have the same naming convention
         self.data_files = sorted(
@@ -48,26 +50,34 @@ class JetClassDataset(Dataset):
             ]
         )
         print(f"Number of data files: {len(self.data_files)}", flush=True, file=logfile)
-        print(f"Data files: {[file.split('/')[-1] for file in self.data_files]}", flush=True, file=logfile)
+        print(
+            f"Data files: {[file.split('/')[-1] for file in self.data_files]}",
+            flush=True,
+            file=logfile,
+        )
         if self.load_labels:
             # Ensure the corresponding label files exist and are in order
-#             self.label_files = [
-#                 os.path.join(self.label_dir, os.path.basename(f))
-#                 for f in self.data_files
-#             ]
+            #             self.label_files = [
+            #                 os.path.join(self.label_dir, os.path.basename(f))
+            #                 for f in self.data_files
+            #             ]
             self.label_files = sorted(
-                        [
-                            os.path.join(self.label_dir, f)
-                            for f in os.listdir(self.label_dir)
-                            if os.path.isfile(os.path.join(self.label_dir, f))
-                        ]
-                    )
+                [
+                    os.path.join(self.label_dir, f)
+                    for f in os.listdir(self.label_dir)
+                    if os.path.isfile(os.path.join(self.label_dir, f))
+                ]
+            )
             print(
                 f"Number of label files: {len(self.label_files)}",
                 flush=True,
                 file=logfile,
             )
-            print(f"Label files: {[file.split('/')[-1] for file in self.label_files]}", flush=True, file=logfile)
+            print(
+                f"Label files: {[file.split('/')[-1] for file in self.label_files]}",
+                flush=True,
+                file=logfile,
+            )
         self.transform = transform
         self.percent = args.percent
 
