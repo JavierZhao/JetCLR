@@ -179,10 +179,13 @@ class JetClassDataset(Dataset):
             data_file_path = os.path.join(self.data_dir, data_filename)
             label_file_path = os.path.join(self.label_dir, label_file_name)
             # Load the tensor from file
-            data_tensor = torch.load(data_file_path)
-            label_tensor = torch.load(label_file_path)
-            data_list.append(data_tensor)
-            label_list.append(label_tensor)
+            if os.path.isfile(data_file_path) and os.path.isfile(
+                label_file_path
+            ):  # Make sure it's a file, not a directory
+                data_tensor = torch.load(data_file_path)
+                label_tensor = torch.load(label_file_path)
+                data_list.append(data_tensor)
+                label_list.append(label_tensor)
 
         # Concatenate all tensors along the first axis
         entire_dataset = torch.cat(data_list, dim=0)
