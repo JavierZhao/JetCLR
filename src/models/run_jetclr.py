@@ -747,7 +747,6 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="percent",
-        default=1,
         help="percentage of data to use for training",
     )
     parser.add_argument(
