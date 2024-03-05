@@ -119,9 +119,7 @@ def main(args):
     print(f"raw_3: {args.raw_3}")
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
-    args.logfile = (
-        f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{args.label}-log.txt"
-    )
+    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{args.label}-{args.ep}-{args.num_samples}-log.txt"
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
@@ -146,7 +144,7 @@ def main(args):
 
     # set up results directory
     base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
-    expt_tag = args.label
+    expt_tag = f"{args.label}-{args.ep}-{args.num_samples}"
     expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
     # check if experiment already exists and is not empty
@@ -166,12 +164,16 @@ def main(args):
     print(f"finetune: {args.finetune}", file=logfile, flush=True)
 
     print("loading data")
+    args.num_files = args.num_samples // 100000
+    if args.num_files == 0:
+        args.num_files = 1
     data = load_data("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
     data_val = load_data("/ssl-jet-vol-v2/toptagging", "val", 1)
     labels = load_labels("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
     labels_val = load_labels("/ssl-jet-vol-v2/toptagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
+    tr_dat_in = tr_dat_in[0 : args.num_samples]
     # reduce validation data
     val_dat_in = val_dat_in[0:10000]
     tr_lab_in = np.concatenate(labels, axis=0)
@@ -318,12 +320,15 @@ def main(args):
         # Load the pretrained model
         print("\nLoading the network", flush=True, file=logfile)
         if args.ep == -1:
-            load_path = f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/model_final.pt"
+            load_path = f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/final_model.pt"
+        elif args.ep == 0:
+            load_path = f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/model_best.pt"
         else:
             load_path = (
                 f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
             )
         net.load_state_dict(torch.load(load_path))
+        print(f"Loaded model from {load_path}", flush=True, file=logfile)
     # initialize the MLP projector
     finetune_mlp_dim = args.output_dim
     if args.finetune_mlp:
@@ -509,6 +514,14 @@ if __name__ == "__main__":
         "--finetune-mlp",
         default="",
         help="Size and number of layers of the MLP finetuning head following output_dim of model, e.g. 512-256-128",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        action="store",
+        dest="num_samples",
+        default=100000,
+        help="number of jets for training",
     )
     parser.add_argument(
         "--finetune",
