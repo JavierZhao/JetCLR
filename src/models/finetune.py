@@ -177,6 +177,7 @@ def main(args):
     # reduce validation data
     val_dat_in = val_dat_in[0:10000]
     tr_lab_in = np.concatenate(labels, axis=0)
+    tr_lab_in = tr_lab_in[0 : args.num_samples]
     val_lab_in = np.concatenate(labels_val, axis=0)
     val_lab_in = val_lab_in[0:10000]
 
