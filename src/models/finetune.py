@@ -164,9 +164,7 @@ def main(args):
     print(f"finetune: {args.finetune}", file=logfile, flush=True)
 
     print("loading data")
-    args.num_files = args.num_samples // 100000
-    if args.num_files == 0:
-        args.num_files = 1
+    args.num_files = args.num_samples // 100000 + 1
     data = load_data("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
     data_val = load_data("/ssl-jet-vol-v2/toptagging", "val", 1)
     labels = load_labels("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
