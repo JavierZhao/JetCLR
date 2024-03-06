@@ -560,7 +560,6 @@ if __name__ == "__main__":
         "--finetune",
         type=bool,
         action="store",
-        default=True,
         help="keep the transformer frozen and only train the MLP head",
     )
     parser.add_argument(
