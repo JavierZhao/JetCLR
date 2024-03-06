@@ -24,6 +24,8 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 
 from sklearn.metrics import accuracy_score
+from sklearn import metrics
+
 
 # load custom modules required for jetCLR training
 from src.modules.jet_augs import (
@@ -113,6 +115,27 @@ def load_labels(dataset_path, flag, n_files=-1):
     return data
 
 
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
+
+
+def get_perf_stats(labels, measures):
+    measures = np.nan_to_num(measures)
+    auc = metrics.roc_auc_score(labels, measures)
+    fpr, tpr, thresholds = metrics.roc_curve(labels, measures)
+    fpr2 = [fpr[i] for i in range(len(fpr)) if tpr[i] >= 0.5]
+    tpr2 = [tpr[i] for i in range(len(tpr)) if tpr[i] >= 0.5]
+    try:
+        imtafe = np.nan_to_num(
+            1 / fpr2[list(tpr2).index(find_nearest(list(tpr2), 0.5))]
+        )
+    except:
+        imtafe = 1
+    return auc, imtafe
+
+
 def main(args):
     t0 = time.time()
     print(f"full_kinematics: {args.full_kinematics}")
@@ -156,7 +179,7 @@ def main(args):
     else:
         # This will create the directory if it does not exist or if it is empty
         os.makedirs(expt_dir, exist_ok=True)
-    print("experiment: " + str(args.label), file=logfile, flush=True)
+    print("experiment: " + str(expt_tag), file=logfile, flush=True)
 
     # print purpose of experiment
     if "from_scratch" in args.label:
@@ -451,7 +474,7 @@ def main(args):
 
         # save the model if lowest val loss is achieved
         if loss_val_all[-1] < l_val_best:
-            print("new lowest val loss", flush=True, file=logfile)
+            # print("new lowest val loss", flush=True, file=logfile)
             l_val_best = loss_val_all[-1]
             if args.finetune:
                 torch.save(
@@ -486,6 +509,13 @@ def main(args):
             np.save(
                 f"{expt_dir}validation_predicted_vals_acc.npy",
                 predicted,
+            )
+            # calculate the AUC and imtafe and output to the logfile
+            auc, imtafe = get_perf_stats(target, predicted[:, 1])
+            print(
+                f"epoch: {epoch}, AUC: {auc}, IMTAFE: {imtafe}",
+                flush=True,
+                file=logfile,
             )
 
         # save all losses and accuracies
