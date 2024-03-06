@@ -142,7 +142,16 @@ def main(args):
     print(f"raw_3: {args.raw_3}")
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
-    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{args.label}-{args.ep}-{args.num_samples}-log.txt"
+    # set up results directory
+    base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
+    expt_tag = f"{args.label}-{args.ep}-{args.num_samples}"
+    if not args.finetune:
+        expt_tag += "-fixed"
+    expt_dir = base_dir + "finetuning/" + expt_tag + "/"
+
+    args.logfile = (
+        f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{expt_tag}-log.txt"
+    )
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
@@ -164,11 +173,6 @@ def main(args):
         device = torch.device("cpu")
         print("Device: CPU", file=logfile, flush=True)
     args.device = device
-
-    # set up results directory
-    base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
-    expt_tag = f"{args.label}-{args.ep}-{args.num_samples}"
-    expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
     # check if experiment already exists and is not empty
 
