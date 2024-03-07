@@ -15,6 +15,7 @@ import copy
 import tqdm
 import gc
 from pathlib import Path
+import math
 
 # load torch modules
 import torch
@@ -144,14 +145,12 @@ def main(args):
     print(f"use continuous mask: {args.cmask}")
     # set up results directory
     base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
-    expt_tag = f"{args.label}-{args.ep}-{args.num_samples}"
+    expt_tag = f"{args.ep}-{math.log10(args.num_samples)}-{args.label}"
     if not args.finetune:
         expt_tag += "-fixed"
     expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
-    args.logfile = (
-        f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/zz-finetune-{expt_tag}-log.txt"
-    )
+    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/{expt_tag}.txt"
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
