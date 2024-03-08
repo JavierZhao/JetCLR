@@ -145,7 +145,9 @@ def main(args):
     print(f"use continuous mask: {args.cmask}")
     # set up results directory
     base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
-    expt_tag = f"{args.ep}-{math.log10(args.num_samples)}-{args.label}"
+    expt_tag = (
+        f"trial-{args.trial}-{args.ep}-{math.log10(args.num_samples)}-{args.label}"
+    )
     if not args.finetune:
         expt_tag += "-fixed"
     expt_dir = base_dir + "finetuning/" + expt_tag + "/"
@@ -560,6 +562,12 @@ if __name__ == "__main__":
         type=int,
         action="store",
         help="keep the transformer frozen and only train the MLP head",
+    )
+    parser.add_argument(
+        "--trial",
+        type=int,
+        action="store",
+        help="Trial number for the experiment",
     )
     parser.add_argument(
         "--device",
