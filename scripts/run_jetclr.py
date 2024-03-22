@@ -204,7 +204,9 @@ def main(args):
     print(f"raw_3: {args.raw_3}")
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
-    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/zz-simCLR-{args.label}-log.txt"
+    args.logfile = (
+        f"/ssl-jet-vol-v3/JetCLR/logs/TopTagging/zz-simCLR-{args.label}-log.txt"
+    )
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
@@ -228,7 +230,7 @@ def main(args):
     args.device = device
 
     # set up results directory
-    base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
+    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
     expt_tag = args.label
     expt_dir = base_dir + "experiments/" + expt_tag + "/"
 
@@ -244,10 +246,10 @@ def main(args):
     print("experiment: " + str(args.label), file=logfile, flush=True)
 
     print("loading data")
-    data = load_data("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
-    data_val = load_data("/ssl-jet-vol-v2/toptagging", "val", 1)
-    labels = load_labels("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
-    labels_val = load_labels("/ssl-jet-vol-v2/toptagging", "val", 1)
+    data = load_data("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    data_val = load_data("/ssl-jet-vol-v3/toptagging", "val", 1)
+    labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
     # reduce validation data
@@ -447,6 +449,7 @@ def main(args):
         print("number of iterations per epoch: " + str(iters), flush=True, file=logfile)
 
     # the loop
+    l_val_best = 1e6
     for epoch in range(args.n_epochs):
         # re-batch the data on each epoch
         indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
@@ -553,6 +556,98 @@ def main(args):
             file=logfile,
         )
 
+        # save the latest model
+        torch.save(net.state_dict(), expt_dir + "model_last.pt")
+
+        # save the model if the validation loss is the lowest
+        if losses_val[-1] < l_val_best:
+            l_val_best = losses_val[-1]
+            print(
+                "saving out new best jetCLR model, validation loss: "
+                + str(round(l_val_best, 5)),
+                flush=True,
+                file=logfile,
+            )
+            torch.save(net.state_dict(), expt_dir + "model_best.pt")
+            # run a short LCT
+            print("--- LCT ----", flush=True, file=logfile)
+            # if args.trs:
+            #     test_dat_1 = translate_jets( test_dat_1, width=args.trsw )
+            #     test_dat_2 = translate_jets( test_dat_2, width=args.trsw )
+            # get the validation reps
+            with torch.no_grad():
+                net.eval()
+                # vl_reps_1 = F.normalize( net.forward_batchwise( torch.Tensor( test_dat_1 ).transpose(1,2), args.batch_size, use_mask=args.mask, use_continuous_mask=args.cmask ).detach().cpu(), dim=-1 ).numpy()
+                # vl_reps_2 = F.normalize( net.forward_batchwise( torch.Tensor( test_dat_2 ).transpose(1,2), args.batch_size, use_mask=args.mask, use_continuous_mask=args.cmask ).detach().cpu(), dim=-1 ).numpy()
+                vl_reps_1 = (
+                    net.forward_batchwise(
+                        torch.Tensor(test_dat_1).transpose(1, 2),
+                        args.batch_size,
+                        use_mask=args.mask,
+                        use_continuous_mask=args.cmask,
+                    )
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                vl_reps_2 = (
+                    net.forward_batchwise(
+                        torch.Tensor(test_dat_2).transpose(1, 2),
+                        args.batch_size,
+                        use_mask=args.mask,
+                        use_continuous_mask=args.cmask,
+                    )
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                net.train()
+            # running the LCT on each rep layer
+            auc_list = []
+            imtafe_list = []
+            # loop through every representation layer
+            for i in range(vl_reps_1.shape[1]):
+                # just want to use the 0th rep (i.e. directly from the transformer) for now
+                if i == 1:
+                    vl0_test = time.time()
+                    (
+                        out_dat_vl,
+                        out_lbs_vl,
+                        losses_vl,
+                        _,
+                    ) = linear_classifier_test(
+                        linear_input_size,
+                        linear_batch_size,
+                        linear_n_epochs,
+                        "adam",
+                        linear_learning_rate,
+                        vl_reps_1[:, i, :],
+                        np.expand_dims(test_lab_1, axis=1),
+                        vl_reps_2[:, i, :],
+                        np.expand_dims(test_lab_2, axis=1),
+                        logfile=logfile,
+                    )
+                    auc, imtafe = get_perf_stats(out_lbs_vl, out_dat_vl)
+                    auc_list.append(auc)
+                    imtafe_list.append(imtafe)
+                    vl1_test = time.time()
+                    print(
+                        "LCT layer "
+                        + str(i)
+                        + "- time taken: "
+                        + str(np.round(vl1_test - vl0_test, 2)),
+                        flush=True,
+                        file=logfile,
+                    )
+                    print(
+                        "auc: "
+                        + str(np.round(auc, 4))
+                        + ", imtafe: "
+                        + str(round(imtafe, 1)),
+                        flush=True,
+                        file=logfile,
+                    )
+
         if args.opt == "sgdca" or args.opt == "sgdslr":
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
         print(
@@ -590,18 +685,6 @@ def main(args):
         if epoch % 10 == 0:
             print(
                 "num threads in use: " + str(torch.get_num_threads()),
-                flush=True,
-                file=logfile,
-            )
-
-        # saving the model
-        if epoch % 10 == 0:
-            print("saving out jetCLR model", flush=True, file=logfile)
-            tms0 = time.time()
-            torch.save(net.state_dict(), expt_dir + "model_ep" + str(epoch) + ".pt")
-            tms1 = time.time()
-            print(
-                f"time taken to save model: {round( tms1-tms0, 1 )}s",
                 flush=True,
                 file=logfile,
             )
@@ -841,7 +924,7 @@ if __name__ == "__main__":
         "--dataset-path",
         type=str,
         action="store",
-        default="/ssl-jet-vol-v2/toptagging/processed",
+        default="/ssl-jet-vol-v3/toptagging/",
         help="Input directory with the dataset",
     )
     parser.add_argument(
@@ -932,7 +1015,7 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="n_epochs",
-        default=300,
+        default=500,
         help="Epochs",
     )
     parser.add_argument(
