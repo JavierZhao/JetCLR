@@ -284,11 +284,6 @@ def main(args):
 
     t1 = time.time()
 
-    # re-scale test data, for the training data this will be done on the fly due to the augmentations
-    if not args.full_kinematics:
-        test_dat_1 = rescale_pts(test_dat_1)
-        test_dat_2 = rescale_pts(test_dat_2)
-
     print(
         "time taken to load and preprocess data: "
         + str(np.round(t1 - t0, 2))
