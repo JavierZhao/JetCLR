@@ -340,13 +340,15 @@ def main(args):
         # Load the pretrained model
         print("\nLoading the network", flush=True, file=logfile)
         if args.ep == -1:
-            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/final_model.pt"
-        elif args.ep == 0:
-            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_best.pt"
-        else:
             load_path = (
-                f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
+                f"/ssl-jet-vol-v3/JetCLR/models/experiments/{args.label}/final_model.pt"
             )
+        elif args.ep == 0:
+            load_path = (
+                f"/ssl-jet-vol-v3/JetCLR/models/experiments/{args.label}/model_best.pt"
+            )
+        else:
+            load_path = f"/ssl-jet-vol-v3/JetCLR/models/experiments/{args.label}/model_ep{args.ep}.pt"
         net.load_state_dict(torch.load(load_path))
         print(f"Loaded model from {load_path}", flush=True, file=logfile)
     # initialize the MLP projector
