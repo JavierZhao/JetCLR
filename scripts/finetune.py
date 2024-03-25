@@ -137,7 +137,7 @@ def main(args):
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
     # set up results directory
-    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
+    base_dir = "/ssl-jet-vol-v3/JetCLR/models/experiments/"
     expt_tag = (
         f"trial-{args.trial}-{args.ep}-{math.log10(args.num_samples)}-{args.label}"
     )
