@@ -29,16 +29,9 @@ from sklearn import metrics
 
 
 # load custom modules required for jetCLR training
-from src.modules.jet_augs import (
-    rotate_jets,
-    distort_jets,
-    translate_jets,
-    collinear_fill_jets,
-    rescale_pts,
-)
-from src.modules.transformer import Transformer
-from src.modules.losses import contrastive_loss, align_loss, uniform_loss
-from src.modules.perf_eval import get_perf_stats, linear_classifier_test
+from .modules.transformer import Transformer
+from .modules.losses import contrastive_loss, align_loss, uniform_loss
+from .modules.perf_eval import get_perf_stats, linear_classifier_test
 
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
