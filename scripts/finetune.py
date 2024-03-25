@@ -92,21 +92,52 @@ def load_data(args, dataset_path, flag, n_files=-1):
     return data
 
 
-def load_labels(dataset_path, flag, n_files=-1):
-    data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/labels/*")
-
-    data = []
-    for i, file in enumerate(data_files):
-        data.append(
-            np.load(
-                f"{dataset_path}/{flag}/processed/7_features_raw/labels/labels_{i}.npy"
-            )
+# load labels
+def load_labels(args, labelsset_path, flag, n_files=-1):
+    # make another variable that combines flag and subdirectory such as 3_features_raw
+    path_id = f"{flag}-"
+    if args.full_kinematics:
+        labels_files = glob.glob(
+            f"{labelsset_path}/{flag}/processed/7_features_raw/labels/*"
         )
-        print(f"--- loaded label file {i} from `{flag}` directory")
+        path_id += "7_features_raw"
+    elif args.raw_3:
+        labels_files = glob.glob(
+            f"{labelsset_path}/{flag}/processed/3_features_raw/labels/*"
+        )
+        path_id += "3_features_raw"
+    else:
+        labels_files = glob.glob(
+            f"{labelsset_path}/{flag}/processed/3_features/labels/*"
+        )
+        path_id += "3_features_relative"
+
+    labels = []
+    for i, _ in enumerate(labels_files):
+        if args.full_kinematics:
+            labels.append(
+                np.load(
+                    f"{labelsset_path}/{flag}/processed/7_features_raw/labels/labels_{i}.npy"
+                )
+            )
+        elif args.raw_3:
+            labels.append(
+                torch.load(
+                    f"{labelsset_path}/{flag}/processed/3_features_raw/labels/labels_{i}.pt"
+                ).numpy()
+            )
+        else:
+            labels.append(
+                torch.load(
+                    f"{labelsset_path}/{flag}/processed/3_features/labels/labels_{i}.pt"
+                ).numpy()
+            )
+
+        print(f"--- loaded file {i} from `{path_id}` directory")
         if n_files != -1 and i == n_files - 1:
             break
 
-    return data
+    return labels
 
 
 def find_nearest(array, value):
