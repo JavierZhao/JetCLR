@@ -219,8 +219,8 @@ def main(args):
     args.num_files = args.num_samples // 100000 + 1
     data = load_data(args, "/ssl-jet-vol-v3/toptagging", "train", args.num_files)
     data_val = load_data(args, "/ssl-jet-vol-v3/toptagging", "val", 1)
-    labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
-    labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
+    labels = load_labels(args, "/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    labels_val = load_labels(args, "/ssl-jet-vol-v3/toptagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
     tr_dat_in = tr_dat_in[0 : args.num_samples]
