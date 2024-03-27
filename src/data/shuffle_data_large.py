@@ -34,6 +34,8 @@ else:
 
 def get_data_file_paths(flag, percent=1):
     data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%/data/*")
+    if percent == 100:
+        data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/{flag}/data/*")
     return data_files
     
 def load_data(data_files):
@@ -117,6 +119,8 @@ def main(args):
     percent = args.percent
     data_file_paths = get_data_file_paths(flag, percent)
     label_file_paths = [path.replace("data/data", "label/labels") for path in data_file_paths]
+    if percent == 100:
+        label_file_paths = [path.replace("data/", "label/labels_") for path in data_file_paths]
 
     save_dir = f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%/shuffled"
     save_dir_data = f"{save_dir}/data"
