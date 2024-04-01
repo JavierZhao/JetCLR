@@ -949,7 +949,7 @@ if __name__ == "__main__":
         help="width param in translate_jets",
     )
     parser.add_argument(
-        "--local_rank",
+        "--local-rank",
         type=int,
         help="Local rank. Necessary for using the torch.distributed.launch utility.",
     )
