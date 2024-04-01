@@ -951,6 +951,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--local-rank",
         type=int,
+        action="store",
         help="Local rank. Necessary for using the torch.distributed.launch utility.",
     )
 
