@@ -193,6 +193,7 @@ def main(rank, args):
         # This will create the directory if it does not exist or if it is empty
         os.makedirs(expt_dir, exist_ok=True)
     print("experiment: " + str(args.label), file=logfile, flush=True)
+    print(f"World size: {args.world_size}", file=logfile, flush=True)
 
     print("loading data")
     # Initialize JetClass custom dataset
