@@ -23,7 +23,8 @@ from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-
+current_directory = os.getcwd()
+print("Current Working Directory:", current_directory)
 # load custom modules required for jetCLR training
 from src.modules.jet_augs import (
     rotate_jets,
