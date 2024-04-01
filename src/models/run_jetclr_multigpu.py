@@ -26,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 current_directory = os.getcwd()
 print("Current Working Directory:", current_directory)
 # load custom modules required for jetCLR training
-from src.modules.jet_augs import (
+from ..modules.jet_augs import (
     rotate_jets,
     distort_jets,
     translate_jets,
