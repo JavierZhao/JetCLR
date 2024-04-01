@@ -154,7 +154,9 @@ def augmentation(args, x_i):
     return x_i, x_j, times
 
 
-def main(rank, args):
+def main(args):
+    rank = args.local_rank
+    torch.cuda.set_device(args.local_rank)
     # Setup for DDP: initialize process group, etc.
     setup(rank, args.world_size)
     t0 = time.time()
@@ -946,8 +948,12 @@ if __name__ == "__main__":
         default=1.0,
         help="width param in translate_jets",
     )
+    parser.add_argument(
+        "--local_rank",
+        type=int,
+        help="Local rank. Necessary for using the torch.distributed.launch utility.",
+    )
 
     args = parser.parse_args()
     args.world_size = torch.cuda.device_count()
-    # Launch the main function across `world_size` processes.
-    torch.multiprocessing.spawn(main, args=(args,), nprocs=args.world_size, join=True)
+    main(args)
