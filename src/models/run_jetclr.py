@@ -139,7 +139,7 @@ def augmentation(args, x_i):
 def main(args):
     t0 = time.time()
 
-    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/JetClass/{args.person}-simCLR-{args.label}-log.txt"
+    args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/JetClass/{args.person}-simCLR-{args.label}-log.txt"
     args.n_heads = 4
     args.opt = "adam"
     args.learning_rate = 0.00005 * args.batch_size / 128
@@ -164,7 +164,7 @@ def main(args):
     args.device = device
 
     # set up results directory
-    base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
+    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
     expt_tag = args.label
     expt_dir = base_dir + "JetClass" + expt_tag + "/"
 
@@ -180,7 +180,7 @@ def main(args):
 
     print("loading data")
     # Initialize JetClass custom dataset
-    dataset_path = "/ssl-jet-vol-v2/JetClass/processed/raw"
+    dataset_path = "/ssl-jet-vol-v3/JetClass/processed/raw"
     train_dataset = JetClassDataset(
         dataset_path,
         flag="train",
