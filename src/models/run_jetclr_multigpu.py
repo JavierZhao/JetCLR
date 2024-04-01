@@ -25,8 +25,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 current_directory = os.getcwd()
 print("Current Working Directory:", current_directory)
+# Add the root directory of the project to sys.path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, project_root)
 # load custom modules required for jetCLR training
-from ..modules.jet_augs import (
+from src.modules.jet_augs import (
     rotate_jets,
     distort_jets,
     translate_jets,
