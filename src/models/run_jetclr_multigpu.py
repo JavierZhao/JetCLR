@@ -23,11 +23,13 @@ from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from datetime import timedelta
+
 current_directory = os.getcwd()
 print("Current Working Directory:", current_directory)
 # Add the root directory of the project to sys.path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, project_root)
+# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+# sys.path.insert(0, project_root)
 # load custom modules required for jetCLR training
 from src.modules.jet_augs import (
     rotate_jets,
@@ -45,9 +47,12 @@ torch.set_num_threads(2)
 
 
 def setup(rank, world_size):
-    # Initialize the process group
     dist.init_process_group(
-        backend="nccl", init_method="env://", world_size=world_size, rank=rank
+        backend="nccl",
+        init_method="env://",
+        world_size=world_size,
+        rank=rank,
+        timeout=timedelta(minutes=60),  # Set a 60-minute timeout
     )
 
 
