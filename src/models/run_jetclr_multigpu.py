@@ -465,9 +465,12 @@ def main(args):
         #     print(f"Data sample {i}: {data.shape}")
         #     if i == 10:
         #         break
-        for idx in train_sampler:
-            log_info(idx, file=logfile, flush=True)
-            # Check if indices are being generated
+
+        # for idx in train_sampler:
+        #     log_info(idx, file=logfile, flush=True)
+        #     # Check if indices are being generated
+        first_batch = next(iter(train_loader))
+        print(f"first_batch shape: {first_batch.shape}")
 
         # iterate over the training loader to make sure it works
         for i, batch in enumerate(train_loader):
