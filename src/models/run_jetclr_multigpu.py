@@ -461,8 +461,9 @@ def main(args):
         print(f"len(train_loader): {len(train_loader)}")
         # iterate over the training loader to make sure it works
         for i, batch in enumerate(train_loader):
-            batch = batch.to(args.device)
-            print_data_device_info(batch)
+            log_info("batch: " + str(i), flush=True, file=logfile)
+            # batch = batch.to(args.device)
+            # print_data_device_info(batch)
             if i == 10:
                 break
 
