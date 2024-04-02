@@ -25,8 +25,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from datetime import timedelta
 
-current_directory = os.getcwd()
-log_info("Current Working Directory:", current_directory)
 # Add the root directory of the project to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
