@@ -466,7 +466,7 @@ def main(args):
         #     if i == 10:
         #         break
         for idx in train_sampler:
-            print(idx, file=logfile, flush=True)
+            log_info(idx, file=logfile, flush=True)
             # Check if indices are being generated
 
         # iterate over the training loader to make sure it works
