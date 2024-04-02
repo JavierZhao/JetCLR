@@ -458,6 +458,7 @@ def main(args):
         td7 = 0
         td8 = 0
 
+        print(f"len(train_loader): {len(train_loader)}")
         # iterate over the training loader to make sure it works
         for i, batch in enumerate(train_loader):
             batch = batch.to(args.device)
