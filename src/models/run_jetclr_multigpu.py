@@ -174,6 +174,25 @@ def np_save_checkpoint(model, filepath):
         np.save(filepath, model)
 
 
+def print_device_info(model):
+    # Assuming 'rank' is globally accessible or passed to this function if not,
+    # you might need to ensure 'rank' is defined or obtainable in this context.
+    current_device = torch.cuda.current_device()
+
+    # Retrieve the device of the first parameter of the model
+    # This assumes the model has parameters and is already placed on a device.
+    model_device = next(model.parameters()).device
+
+    print(f"Current process device: {current_device}")
+    print(f"Model's device: {model_device}")
+
+
+def print_data_device_info(data):
+    current_device = torch.cuda.current_device()
+    print(f"Current process device: {current_device}")
+    print(f"Data device: {data.device}")
+
+
 def main(args):
     rank = args.local_rank
     torch.cuda.set_device(args.local_rank)
@@ -420,6 +439,8 @@ def main(args):
     l_val_best = 1000000  # initialise the best validation loss
     # the loop
     for epoch in range(args.n_epochs):
+        log_info("epoch: " + str(epoch), flush=True, file=logfile)
+        print_device_info(net)
         # initialise timing stats
         te0 = time.time()
 
@@ -448,8 +469,10 @@ def main(args):
             total=int(len(train_dataset) / args.batch_size),
             desc="Training",
         )
-        for _, batch in enumerate(pbar_t):
+        for i, batch in enumerate(pbar_t):
+            log_info("batch: " + str(i), flush=True, file=logfile)
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
+            print_data_device_info(batch)
             net.optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
             time1, time2, time3, time4, time5 = times
