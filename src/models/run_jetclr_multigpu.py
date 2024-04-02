@@ -26,7 +26,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from datetime import timedelta
 
 current_directory = os.getcwd()
-print("Current Working Directory:", current_directory)
+log_info("Current Working Directory:", current_directory)
 # Add the root directory of the project to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
@@ -159,6 +159,21 @@ def augmentation(args, x_i):
     return x_i, x_j, times
 
 
+def log_info(message, file=None, flush=True):
+    if dist.get_rank() == 0:
+        print(message, file=file, flush=True)
+
+
+def torch_save_checkpoint(model, filepath):
+    if dist.get_rank() == 0:
+        torch.save(model.state_dict(), filepath)
+
+
+def np_save_checkpoint(model, filepath):
+    if dist.get_rank() == 0:
+        np.save(filepath, model)
+
+
 def main(args):
     rank = args.local_rank
     torch.cuda.set_device(args.local_rank)
@@ -173,21 +188,21 @@ def main(args):
 
     # initialise logfile
     logfile = open(args.logfile, "a")
-    print("logfile initialised", file=logfile, flush=True)
-    # print number of workers
-    print("number of workers: " + str(args.n_workers), file=logfile, flush=True)
+    log_info("logfile initialised", file=logfile, flush=True)
+    # log_info number of workers
+    log_info("number of workers: " + str(args.n_workers), file=logfile, flush=True)
 
     # # define the global base device
     # world_size = torch.cuda.device_count()
     # if world_size:
     #     device = torch.device("cuda:0")
     #     for i in range(world_size):
-    #         print(
+    #         log_info(
     #             f"Device {i}: {torch.cuda.get_device_name(i)}", file=logfile, flush=True
     #         )
     # else:
     #     device = torch.device("cpu")
-    #     print("Device: CPU", file=logfile, flush=True)
+    #     log_info("Device: CPU", file=logfile, flush=True)
     # args.device = device
 
     # set up results directory
@@ -203,10 +218,10 @@ def main(args):
     else:
         # This will create the directory if it does not exist or if it is empty
         os.makedirs(expt_dir, exist_ok=True)
-    print("experiment: " + str(args.label), file=logfile, flush=True)
-    print(f"World size: {args.world_size}", file=logfile, flush=True)
+    log_info("experiment: " + str(args.label), file=logfile, flush=True)
+    log_info(f"World size: {args.world_size}", file=logfile, flush=True)
 
-    print("loading data")
+    log_info("loading data")
     # Initialize JetClass custom dataset
     dataset_path = "/ssl-jet-vol-v3/JetClass/processed/raw"
     train_dataset = JetClassDataset(
@@ -246,25 +261,25 @@ def main(args):
     gc.collect()
 
     input_dim = train_dataset.get_sample_shape()[0]
-    print(f"input_dim: {input_dim}")
+    log_info(f"input_dim: {input_dim}")
 
-    # print data dimensions
-    print(
+    # log_info data dimensions
+    log_info(
         "Training data shape: " + str(train_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
-    print(
+    log_info(
         "Validation data shape: " + str(val_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
-    print(
+    log_info(
         "Testing data shape: " + str(test_dataset.get_dataset_shape()),
         flush=True,
         file=logfile,
     )
-    print(
+    log_info(
         "Testing labels shape: " + str(test_dataset.get_labels_shape()),
         flush=True,
         file=logfile,
@@ -272,7 +287,7 @@ def main(args):
 
     t1 = time.time()
 
-    print(
+    log_info(
         "time taken to load data: " + str(np.round(t1 - t0, 2)) + " seconds",
         flush=True,
         file=logfile,
@@ -284,46 +299,48 @@ def main(args):
     linear_learning_rate = 0.001
     linear_batch_size = 128  # we can try a larger batch size for the LCT
 
-    print(
+    log_info(
         "--- contrastive learning transformer network architecture ---",
         flush=True,
         file=logfile,
     )
-    print("model dimension: " + str(args.model_dim), flush=True, file=logfile)
-    print("number of heads: " + str(args.n_heads), flush=True, file=logfile)
-    print(
+    log_info("model dimension: " + str(args.model_dim), flush=True, file=logfile)
+    log_info("number of heads: " + str(args.n_heads), flush=True, file=logfile)
+    log_info(
         "dimension of feedforward network: " + str(args.dim_feedforward),
         flush=True,
         file=logfile,
     )
-    print("number of layers: " + str(args.n_layers), flush=True, file=logfile)
-    print("number of head layers: " + str(args.n_head_layers), flush=True, file=logfile)
-    print("optimiser: " + str(args.opt), flush=True, file=logfile)
-    print(f"use mask: {True if args.mask else False}", flush=True, file=logfile)
-    print(
+    log_info("number of layers: " + str(args.n_layers), flush=True, file=logfile)
+    log_info(
+        "number of head layers: " + str(args.n_head_layers), flush=True, file=logfile
+    )
+    log_info("optimiser: " + str(args.opt), flush=True, file=logfile)
+    log_info(f"use mask: {True if args.mask else False}", flush=True, file=logfile)
+    log_info(
         f"use continuous mask: {True if args.cmask else False}",
         flush=True,
         file=logfile,
     )
-    print("\n--- hyper-parameters ---", flush=True, file=logfile)
-    print("learning rate: " + str(args.learning_rate), flush=True, file=logfile)
-    print("batch size: " + str(args.batch_size), flush=True, file=logfile)
-    print("temperature: " + str(args.temperature), flush=True, file=logfile)
-    print("\n--- symmetries/augmentations ---", flush=True, file=logfile)
-    print("rotations: " + str(args.rot), flush=True, file=logfile)
-    print("low pT smearing: " + str(args.ptd), flush=True, file=logfile)
-    print("pT smearing clip parameter: " + str(args.ptcm), flush=True, file=logfile)
-    print("translations: " + str(args.trs), flush=True, file=logfile)
-    print("translations width: " + str(args.trsw), flush=True, file=logfile)
-    print(
+    log_info("\n--- hyper-parameters ---", flush=True, file=logfile)
+    log_info("learning rate: " + str(args.learning_rate), flush=True, file=logfile)
+    log_info("batch size: " + str(args.batch_size), flush=True, file=logfile)
+    log_info("temperature: " + str(args.temperature), flush=True, file=logfile)
+    log_info("\n--- symmetries/augmentations ---", flush=True, file=logfile)
+    log_info("rotations: " + str(args.rot), flush=True, file=logfile)
+    log_info("low pT smearing: " + str(args.ptd), flush=True, file=logfile)
+    log_info("pT smearing clip parameter: " + str(args.ptcm), flush=True, file=logfile)
+    log_info("translations: " + str(args.trs), flush=True, file=logfile)
+    log_info("translations width: " + str(args.trsw), flush=True, file=logfile)
+    log_info(
         "Number of input features per particle: " + str(input_dim),
         flush=True,
         file=logfile,
     )
-    print("---------------", flush=True, file=logfile)
+    log_info("---------------", flush=True, file=logfile)
 
     # initialise the network
-    print("\ninitialising the network", flush=True, file=logfile)
+    log_info("\ninitialising the network", flush=True, file=logfile)
     net = Transformer(
         input_dim,
         args.model_dim,
@@ -357,12 +374,12 @@ def main(args):
         )
 
     # THE TRAINING LOOP
-    print(
+    log_info(
         "starting training loop, running for " + str(args.n_epochs) + " epochs",
         flush=True,
         file=logfile,
     )
-    print("---------------", flush=True, file=logfile)
+    log_info("---------------", flush=True, file=logfile)
 
     # initialise lists for storing training stats
     auc_epochs = []
@@ -376,7 +393,9 @@ def main(args):
     if args.opt == "sgdca":
         # number of iterations per epoch
         iters = int(len(train_dataset) / args.batch_size)
-        print("number of iterations per epoch: " + str(iters), flush=True, file=logfile)
+        log_info(
+            "number of iterations per epoch: " + str(iters), flush=True, file=logfile
+        )
 
     train_loader = DataLoader(
         train_dataset,
@@ -502,7 +521,7 @@ def main(args):
             loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
 
-        print(
+        log_info(
             "epoch: "
             + str(epoch)
             + ", loss: "
@@ -514,22 +533,22 @@ def main(args):
         )
 
         # save the latest model
-        torch.save(net.state_dict(), expt_dir + "model_last.pt")
+        torch_save_checkpoint(net.state_dict(), expt_dir + "model_last.pt")
 
         # save the model if the validation loss is the lowest
         if losses_val[-1] < l_val_best:
             l_val_best = losses_val[-1]
-            print(
+            log_info(
                 "saving out new best jetCLR model, validation loss: " + str(l_val_best),
                 flush=True,
                 file=logfile,
             )
-            torch.save(net.state_dict(), expt_dir + "model_best.pt")
+            torch_save_checkpoint(net.state_dict(), expt_dir + "model_best.pt")
 
         # summarise alignment and uniformity stats
         loss_align_epochs.append(np.mean(np.array(loss_align_e)))
         loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
-        print(
+        log_info(
             "alignment: "
             + str(loss_align_epochs[-1])
             + ", uniformity: "
@@ -539,8 +558,8 @@ def main(args):
         )
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
-            print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
-        print(
+            log_info("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
+        log_info(
             f"total time taken: {round( te1-te0, 1 )}s, augmentation: {round(td1+td2+td3+td4+td5,1)}s, forward {round(td6, 1)}s, backward {round(td8, 1)}s, other {round(te1-te0-(td1+td2+td3+td4+td6+td7+td8), 2)}s",
             flush=True,
             file=logfile,
@@ -552,7 +571,7 @@ def main(args):
             r = torch.cuda.memory_reserved(0)
             a = torch.cuda.memory_allocated(0)
             f = r - a  # free inside reserved
-            print(
+            log_info(
                 f"CUDA memory: total {t / np.power(1024,3)}G, reserved {r/ np.power(1024,3)}G, allocated {a/ np.power(1024,3)}G, free {f/ np.power(1024,3)}G",
                 flush=True,
                 file=logfile,
@@ -560,7 +579,7 @@ def main(args):
 
         # check number of threads being used
         if epoch % 10 == 0:
-            print(
+            log_info(
                 "num threads in use: " + str(torch.get_num_threads()),
                 flush=True,
                 file=logfile,
@@ -568,7 +587,7 @@ def main(args):
 
         # run a short LCT
         # if epoch % 10 == 0:
-        #     print("--- LCT ----", flush=True, file=logfile)
+        #     log_info("--- LCT ----", flush=True, file=logfile)
         #     # get the validation reps
         #     with torch.no_grad():
         #         net.eval()
@@ -624,7 +643,7 @@ def main(args):
         #             auc_list.append(auc)
         #             imtafe_list.append(imtafe)
         #             vl1_test = time.time()
-        #             print(
+        #             log_info(
         #                 "LCT layer "
         #                 + str(i)
         #                 + "- time taken: "
@@ -632,7 +651,7 @@ def main(args):
         #                 flush=True,
         #                 file=logfile,
         #             )
-        #             print(
+        #             log_info(
         #                 "auc: "
         #                 + str(np.round(auc, 4))
         #                 + ", imtafe: "
@@ -640,7 +659,7 @@ def main(args):
         #                 flush=True,
         #                 file=logfile,
         #             )
-        #             np.save(
+        #             np_save_checkpoint(
         #                 expt_dir
         #                 + "lct_ep"
         #                 + str(epoch)
@@ -651,40 +670,40 @@ def main(args):
         #             )
         #     auc_epochs.append(auc_list)
         #     imtafe_epochs.append(imtafe_list)
-        #     print("---- --- ----", flush=True, file=logfile)
+        #     log_info("---- --- ----", flush=True, file=logfile)
 
         # saving out training stats
-        np.save(expt_dir + "clr_losses.npy", losses)
-        np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
-        np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
-        np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
-        np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
-        np.save(expt_dir + "val_losses.npy", losses_val)
+        np_save_checkpoint(expt_dir + "clr_losses.npy", losses)
+        np_save_checkpoint(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
+        np_save_checkpoint(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
+        np_save_checkpoint(expt_dir + "align_loss_train.npy", loss_align_epochs)
+        np_save_checkpoint(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+        np_save_checkpoint(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
 
-    print(
+    log_info(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
         flush=True,
         file=logfile,
     )
 
     # save out results
-    print("saving out data/results", flush=True, file=logfile)
-    np.save(expt_dir + "clr_losses.npy", losses)
-    np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
-    np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
-    np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
-    np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+    log_info("saving out data/results", flush=True, file=logfile)
+    np_save_checkpoint(expt_dir + "clr_losses.npy", losses)
+    np_save_checkpoint(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
+    np_save_checkpoint(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
+    np_save_checkpoint(expt_dir + "align_loss_train.npy", loss_align_epochs)
+    np_save_checkpoint(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
     # save validation losses
-    np.save(expt_dir + "val_losses.npy", losses_val)
+    np_save_checkpoint(expt_dir + "val_losses.npy", losses_val)
 
     # save out final trained model
-    print("saving out final jetCLR model", flush=True, file=logfile)
-    torch.save(net.state_dict(), expt_dir + "final_model.pt")
+    log_info("saving out final jetCLR model", flush=True, file=logfile)
+    torch_save_checkpoint(net.state_dict(), expt_dir + "final_model.pt")
 
-    # print("starting the final LCT run", flush=True, file=logfile)
-    # print("............................", flush=True, file=logfile)
+    # log_info("starting the final LCT run", flush=True, file=logfile)
+    # log_info("............................", flush=True, file=logfile)
     # with torch.no_grad():
     #     net.eval()
     #     vl_reps_1 = (
@@ -730,7 +749,7 @@ def main(args):
     #     ep = 0
     #     step_size = 25
     #     for lss, val_lss in zip(losses_f[::step_size], val_losses_f):
-    #         print(
+    #         log_info(
     #             f"(rep layer {i}) epoch: "
     #             + str(ep)
     #             + ", loss: "
@@ -740,29 +759,29 @@ def main(args):
     #             flush=True,
     #         )
     #         ep += step_size
-    #     print(f"(rep layer {i}) auc: " + str(round(auc, 4)), flush=True, file=logfile)
-    #     print(
+    #     log_info(f"(rep layer {i}) auc: " + str(round(auc, 4)), flush=True, file=logfile)
+    #     log_info(
     #         f"(rep layer {i}) imtafe: " + str(round(imtafe, 1)),
     #         flush=True,
     #         file=logfile,
     #     )
     #     t4 = time.time()
-    #     np.save(expt_dir + f"linear_losses_{i}.npy", losses_f)
-    #     np.save(expt_dir + f"test_linear_cl_{i}.npy", out_dat_f)
+    #     np_save_checkpoint(expt_dir + f"linear_losses_{i}.npy", losses_f)
+    #     np_save_checkpoint(expt_dir + f"test_linear_cl_{i}.npy", out_dat_f)
 
-    # print(
+    # log_info(
     #     "final LCT  done and output saved, time taken: " + str(np.round(t4 - t3, 2)),
     #     flush=True,
     #     file=logfile,
     # )
-    print("............................", flush=True, file=logfile)
+    log_info("............................", flush=True, file=logfile)
 
     t5 = time.time()
 
-    print("----------------------------", flush=True, file=logfile)
-    print("----------------------------", flush=True, file=logfile)
-    print("----------------------------", flush=True, file=logfile)
-    print(
+    log_info("----------------------------", flush=True, file=logfile)
+    log_info("----------------------------", flush=True, file=logfile)
+    log_info("----------------------------", flush=True, file=logfile)
+    log_info(
         "ALL DONE, total time taken: " + str(np.round(t5 - t0, 2)),
         flush=True,
         file=logfile,
