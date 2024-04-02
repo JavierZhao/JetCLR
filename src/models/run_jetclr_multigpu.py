@@ -460,11 +460,14 @@ def main(args):
         td7 = 0
         td8 = 0
 
-        print(f"len(train_dataset): {len(train_dataset)}")
-        for i, data in enumerate(train_dataset):
-            print(f"Data sample {i}: {data.shape}")
-            if i == 10:
-                break
+        # print(f"len(train_dataset): {len(train_dataset)}")
+        # for i, data in enumerate(train_dataset):
+        #     print(f"Data sample {i}: {data.shape}")
+        #     if i == 10:
+        #         break
+        for idx in train_sampler:
+            print(idx)
+            # Check if indices are being generated
 
         # iterate over the training loader to make sure it works
         for i, batch in enumerate(train_loader):
