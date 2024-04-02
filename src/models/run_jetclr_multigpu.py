@@ -438,6 +438,8 @@ def main(args):
     # the loop
     for epoch in range(args.n_epochs):
         log_info("epoch: " + str(epoch), flush=True, file=logfile)
+        train_sampler.set_epoch(epoch)
+        val_sampler.set_epoch(epoch)
         print_device_info(net)
         # initialise timing stats
         te0 = time.time()
@@ -458,7 +460,12 @@ def main(args):
         td7 = 0
         td8 = 0
 
-        print(f"len(train_loader): {len(train_loader)}")
+        print(f"len(train_dataset): {len(train_dataset)}")
+        for i, data in enumerate(train_dataset):
+            print(f"Data sample {i}: {data.shape}")
+            if i == 10:
+                break
+
         # iterate over the training loader to make sure it works
         for i, batch in enumerate(train_loader):
             log_info("batch: " + str(i), flush=True, file=logfile)
