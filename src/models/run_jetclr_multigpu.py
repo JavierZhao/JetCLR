@@ -440,7 +440,7 @@ def main(args):
         log_info("epoch: " + str(epoch), flush=True, file=logfile)
         train_sampler.set_epoch(epoch)
         val_sampler.set_epoch(epoch)
-        print_device_info(net, file=logfile, flush=True)
+        print_device_info(net)
         # initialise timing stats
         te0 = time.time()
 
