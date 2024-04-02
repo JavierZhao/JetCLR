@@ -440,7 +440,7 @@ def main(args):
         log_info("epoch: " + str(epoch), flush=True, file=logfile)
         train_sampler.set_epoch(epoch)
         val_sampler.set_epoch(epoch)
-        print_device_info(net)
+        print_device_info(net, file=logfile, flush=True)
         # initialise timing stats
         te0 = time.time()
 
@@ -466,7 +466,7 @@ def main(args):
         #     if i == 10:
         #         break
         for idx in train_sampler:
-            print(idx)
+            print(idx, file=logfile, flush=True)
             # Check if indices are being generated
 
         # iterate over the training loader to make sure it works
