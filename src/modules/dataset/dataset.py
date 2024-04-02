@@ -50,11 +50,11 @@ class JetClassDataset(Dataset):
             ]
         )
         print(f"Number of data files: {len(self.data_files)}", flush=True, file=logfile)
-        print(
-            f"Data files: {[file.split('/')[-1] for file in self.data_files]}",
-            flush=True,
-            file=logfile,
-        )
+        # print(
+        #     f"Data files: {[file.split('/')[-1] for file in self.data_files]}",
+        #     flush=True,
+        #     file=logfile,
+        # )
         if self.load_labels:
             # Ensure the corresponding label files exist and are in order
             #             self.label_files = [
@@ -73,11 +73,11 @@ class JetClassDataset(Dataset):
                 flush=True,
                 file=logfile,
             )
-            print(
-                f"Label files: {[file.split('/')[-1] for file in self.label_files]}",
-                flush=True,
-                file=logfile,
-            )
+            # print(
+            #     f"Label files: {[file.split('/')[-1] for file in self.label_files]}",
+            #     flush=True,
+            #     file=logfile,
+            # )
         self.transform = transform
         self.percent = args.percent
 
@@ -98,7 +98,7 @@ class JetClassDataset(Dataset):
         data_path = self.data_files[file_idx]
         # Check cache for data; load and cache if not present
         if data_path not in self.cache:
-            print(data_path)
+            # print(data_path)
             self.cache[data_path] = torch.load(data_path)
         data = self.cache[data_path]
         sample = data[jet_idx]
