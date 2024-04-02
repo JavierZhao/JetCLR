@@ -458,15 +458,24 @@ def main(args):
         td7 = 0
         td8 = 0
 
+        # iterate over the training loader to make sure it works
+        for i, batch in enumerate(train_loader):
+            batch = batch.to(args.device)
+            print_data_device_info(batch)
+            if i == 10:
+                break
+
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
 
         net.train()
+        total_train = int(len(train_dataset) / args.batch_size)
         pbar_t = tqdm.tqdm(
             train_loader,
-            total=int(len(train_dataset) / args.batch_size),
+            total=total_train,
             desc="Training",
         )
+        log_info("total batches: " + str(total_train), flush=True, file=logfile)
         for i, batch in enumerate(pbar_t):
             log_info("batch: " + str(i), flush=True, file=logfile)
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
