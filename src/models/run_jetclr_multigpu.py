@@ -414,13 +414,21 @@ def main(args):
             "number of iterations per epoch: " + str(iters), flush=True, file=logfile
         )
 
+        # train_loader = DataLoader(
+        #     train_dataset,
+        #     batch_size=args.batch_size,
+        #     shuffle=False,
+        #     num_workers=args.n_workers,
+        #     pin_memory=True,
+        #     prefetch_factor=2,
+        #     sampler=train_sampler,
+        # )
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=args.n_workers,
-        pin_memory=True,
-        prefetch_factor=2,
+        num_workers=0,
+        pin_memory=False,
         sampler=train_sampler,
     )
 
