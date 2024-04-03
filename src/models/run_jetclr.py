@@ -779,7 +779,7 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="model_dim",
-        default=1000,
+        default=1024,
         help="dimension of the transformer-encoder",
     )
     parser.add_argument(
@@ -787,7 +787,7 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="dim_feedforward",
-        default=1000,
+        default=1024,
         help="feed forward dimension of the transformer-encoder",
     )
     parser.add_argument(
@@ -811,7 +811,7 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="output_dim",
-        default=1000,
+        default=1024,
         help="dimension of the output of transformer-encoder",
     )
     parser.add_argument(
