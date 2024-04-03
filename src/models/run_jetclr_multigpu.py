@@ -162,9 +162,9 @@ def log_info(message, file=None, flush=True):
         print(message, file=file, flush=True)
 
 
-def torch_save_checkpoint(model, filepath):
+def torch_save_checkpoint(state_dict, filepath):
     if dist.get_rank() == 0:
-        torch.save(model.state_dict(), filepath)
+        torch.save(state_dict, filepath)
 
 
 def np_save_checkpoint(model, filepath):
