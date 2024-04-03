@@ -378,6 +378,9 @@ def main(args):
     net.to(device)
     net = DDP(net, device_ids=[rank])
 
+    # set up the optimiser
+    optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
+
     # set learning rate scheduling, if required
     # SGD with cosine annealing
     if args.opt == "sgdca":
@@ -477,16 +480,17 @@ def main(args):
         # for idx in train_sampler:
         #     log_info(idx, file=logfile, flush=True)
         #     # Check if indices are being generated
-        first_batch = next(iter(train_loader))
-        print(f"first_batch shape: {first_batch.shape}")
+
+        # first_batch = next(iter(train_loader))
+        # print(f"first_batch shape: {first_batch.shape}")
 
         # iterate over the training loader to make sure it works
-        for i, batch in enumerate(train_loader):
-            log_info("batch: " + str(i), flush=True, file=logfile)
-            # batch = batch.to(args.device)
-            # print_data_device_info(batch)
-            if i == 10:
-                break
+        # for i, batch in enumerate(train_loader):
+        #     log_info("batch: " + str(i), flush=True, file=logfile)
+        #     # batch = batch.to(args.device)
+        #     # print_data_device_info(batch)
+        #     if i == 10:
+        #         break
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
@@ -503,7 +507,7 @@ def main(args):
             log_info("batch: " + str(i), flush=True, file=logfile)
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             print_data_device_info(batch)
-            net.optimizer.zero_grad()
+            optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
             time1, time2, time3, time4, time5 = times
             time6 = time.time()
@@ -527,7 +531,7 @@ def main(args):
             # compute the loss, back-propagate, and update scheduler if required
             loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
             loss.backward()
-            net.optimizer.step()
+            optimizer.step()
             if args.opt == "sgdca":
                 scheduler.step(epoch + i / iters)
             losses_e.append(loss.detach().cpu().numpy())
@@ -563,7 +567,7 @@ def main(args):
             )
             for _, batch in enumerate(pbar_v):
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                net.optimizer.zero_grad()
+                optimizer.zero_grad()
                 y_i, y_j, times = augmentation(args, batch)
                 time1, time2, time3, time4, time5 = times
                 z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
