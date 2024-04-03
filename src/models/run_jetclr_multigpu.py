@@ -504,9 +504,9 @@ def main(args):
         )
         log_info("total batches: " + str(total_train), flush=True, file=logfile)
         for i, batch in enumerate(pbar_t):
-            log_info("batch: " + str(i), flush=True, file=logfile)
+            # log_info("batch: " + str(i), flush=True, file=logfile)
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-            print_data_device_info(batch)
+            # print_data_device_info(batch)
             optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
             time1, time2, time3, time4, time5 = times
