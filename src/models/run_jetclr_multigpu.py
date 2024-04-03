@@ -496,7 +496,7 @@ def main(args):
         # augmentations of the jets are done on the fly
 
         net.train()
-        total_train = int(len(train_dataset) / args.batch_size)
+        total_train = int(len(train_dataset) / (args.batch_size * args.world_size))
         pbar_t = tqdm.tqdm(
             train_loader,
             total=total_train,
