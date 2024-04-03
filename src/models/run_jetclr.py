@@ -302,6 +302,7 @@ def main(args):
         dropout=0.1,
         opt=args.opt,
         log=True,
+        attention_type=args.attention_type
     )
 
     # send network to device
@@ -735,6 +736,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # new arguments
     parser.add_argument(
+        "--attention-type",
+        type=str,
+        action="store",
+        dest="attention_type",
+        default="efficient",
+        help="math/efficient/flash",
+    )
+    parser.add_argument(
         "--person",
         type=str,
         action="store",
@@ -913,6 +922,7 @@ if __name__ == "__main__":
         default=1.0,
         help="width param in translate_jets",
     )
+    
 
     args = parser.parse_args()
     main(args)

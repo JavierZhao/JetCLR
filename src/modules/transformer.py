@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torch.backends.cuda import sdp_kernel
 
 # class for transformer network
 class Transformer(nn.Module):
@@ -27,6 +27,7 @@ class Transformer(nn.Module):
         dropout=0.1,
         opt="adam",
         log=False,
+        attention_type="efficient"
     ):
         super().__init__()
         # define hyperparameters
@@ -49,6 +50,12 @@ class Transformer(nn.Module):
             ),
             n_layers,
         )
+        self.attn_params = {
+             "math": {"enable_math": True, "enable_mem_efficient": False, "enable_flash": False},
+             "efficient": {"enable_math": False, "enable_mem_efficient": True, "enable_flash": False},
+             "flash": {"enable_math": False, "enable_mem_efficient": False, "enable_flash": True},
+         }
+        self.attention_type = attention_type
         # head_layers have output_dim
         if n_head_layers == 0:
             self.head_layers = []
@@ -102,7 +109,9 @@ class Transformer(nn.Module):
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
         x = self.embedding(x)
-        x = self.transformer(x, mask=mask)
+        # explicitly call the desired attention mechanism
+        with sdp_kernel(**self.attn_params[self.attention_type]):
+            x = self.transformer(x, mask=mask)
         if use_mask:
             # set masked constituents to zero
             # otherwise the sum will change if the constituents with 0 pT change
