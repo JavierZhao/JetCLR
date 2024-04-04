@@ -167,9 +167,9 @@ def torch_save_checkpoint(state_dict, filepath):
         torch.save(state_dict, filepath)
 
 
-def np_save_checkpoint(model, filepath):
+def np_save_checkpoint(filepath, arr):
     if dist.get_rank() == 0:
-        np.save(filepath, model)
+        np.save(filepath, arr)
 
 
 def print_device_info(model):
