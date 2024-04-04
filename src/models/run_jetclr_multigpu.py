@@ -124,8 +124,8 @@ def augmentation(args, x_i):
     E_rel_log_j = np.where(E_rel_j != 0, np.log(E_rel_j), 0)
     E_rel_log_j = np.nan_to_num(E_rel_log_j, nan=0.0)
     # deltaR
-    deltaR_i = np.sqrt(np.square(eta_i) + np.square(phi_i))
-    deltaR_j = np.sqrt(np.square(eta_j) + np.square(phi_j))
+    # deltaR_i = np.sqrt(np.square(eta_i) + np.square(phi_i))
+    # deltaR_j = np.sqrt(np.square(eta_j) + np.square(phi_j))
     # stack them to obtain the final augmented data
     x_i = np.stack(
         [
@@ -135,10 +135,9 @@ def augmentation(args, x_i):
             E_log_i,
             pt_rel_log_i,
             E_rel_log_i,
-            deltaR_i,
         ],
         1,
-    )  # (batch_size, 7, n_constit)
+    )  # (batch_size, 6, n_constit)
     x_j = np.stack(
         [
             eta_j,
@@ -147,10 +146,9 @@ def augmentation(args, x_i):
             E_log_j,
             pt_rel_log_j,
             E_rel_log_j,
-            deltaR_j,
         ],
         1,
-    )  # (batch_size, 7, n_constit)
+    )  # (batch_size, 6, n_constit)
     x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
     x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
     times = [time1, time2, time3, time4, time5]

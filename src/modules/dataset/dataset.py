@@ -114,6 +114,9 @@ class JetClassDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
+        # take out the last feature (delta R)
+        sample = sample[:-1]
+
         if self.load_labels:
             return sample, label
         else:
