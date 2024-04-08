@@ -184,3 +184,58 @@ def linear_classifier_test(
     )
     out_lbs = telab_in
     return out_dat, out_lbs, losses, val_losses  # Return the validation losses as well
+
+def binary_linear_classifier_test(
+    linear_input_size,
+    linear_batch_size,
+    linear_n_epochs,
+    linear_opt,
+    linear_learning_rate,
+    reps_tr_in,
+    trlab_in,
+    reps_te_in,
+    telab_in,
+    desired_label,
+    val_fraction=0.1,  # Fraction of training data to use as validation
+    n_hidden=0,
+    hidden_size=0,
+    logfile=None,
+): 
+    labels = [
+        'QCD',
+        'Hbb',
+        'Hgg',
+        'H4q',
+        'Hqql',
+        'Zqq',
+        'Wqq',
+        'Tbqq',
+        'Tbl'
+    ]
+    indices_to_modify = [i for i, label in enumerate(labels) if label != desired_label]
+    
+    trlab_in_bin = trlab_in.clone()
+    trlab_in_bin[:, indices_to_modify] = 0
+    trlab_in_max_indices = torch.argmax(trlab_in_bin, dim=1)
+    trlab_in_collapsed = trlab_in_bin[torch.arange(trlab_in_bin.shape[0]), trlab_in_max_indices]
+
+    telab_in_bin = telab_in.clone()
+    telab_in_bin[:, indices_to_modify] = 0
+    telab_in_max_indices = torch.argmax(telab_in_bin, dim=1)
+    telab_in_collapsed = telab_in_bin[torch.arange(telab_in_bin.shape[0]), telab_in_max_indices]
+
+    return linear_classifier_test(
+        linear_input_size,
+        linear_batch_size,
+        linear_n_epochs,
+        linear_opt,
+        linear_learning_rate,
+        reps_tr_in,
+        trlab_in_collapsed,
+        reps_te_in,
+        telab_in_collapsed,
+        val_fraction=val_fraction,
+        n_hidden=n_hidden,
+        hidden_size=hidden_size,
+        logfile=logfile,
+    )
