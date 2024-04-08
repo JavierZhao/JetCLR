@@ -57,6 +57,8 @@ args.ptcm = 0.1
 args.full_kinematics = True
 args.percent = 1
 
+os.makedirs(args.save_path, exist_ok=True)
+
 
 def augmentation(args, x_i):
     x_i = x_i.cpu().numpy()
