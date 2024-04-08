@@ -297,6 +297,8 @@ with open(f"{args.save_path}/avg_sim.csv", "w", newline="") as csvfile:
         writer.writerow([key, value])
 print(avg_similarities)
 
+class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
+
 
 def plot_avg_cosine_similarities(args, avg_similarities):
     """
@@ -305,6 +307,7 @@ def plot_avg_cosine_similarities(args, avg_similarities):
     :param avg_similarities: Dictionary of average cosine similarities returned by
                              compute_avg_cosine_similarity_for_models function.
     """
+    os.makedirs(args.save_path, exist_ok=True)
     # Assuming each entry in avg_similarities contains keys for each class label
     # and values are the average cosine similarity for that class at a specific epoch
 
@@ -312,25 +315,25 @@ def plot_avg_cosine_similarities(args, avg_similarities):
     plt.figure(figsize=(10, 6))
 
     # For each class, plot its average similarity across epochs
-    for class_label in range(10):  # Assuming class labels are from 0 to 9
+    for i, class_label in enumerate(
+        class_labels
+    ):  # Assuming class labels are from 0 to 9
         epochs = sorted(avg_similarities.keys())
         avg_sims = [
-            avg_similarities[ep][class_label]
-            for ep in epochs
-            if class_label in avg_similarities[ep]
+            avg_similarities[ep][i] for ep in epochs if i in avg_similarities[ep]
         ]
 
-        plt.plot(epochs, avg_sims, marker="o", label=f"Class {class_label}")
+        plt.plot(epochs, avg_sims, marker="o", label=class_label)
 
     plt.xlabel("Epoch")
     plt.ylabel("Average Cosine Similarity")
     plt.title("Average Cosine Similarity per Class Across Epochs")
     plt.legend()
     plt.grid(True)
-    # plt.show()
     plt.savefig(
         f"{args.save_path}/avg_cosine_similarities.png", dpi=300, bbox_inches="tight"
     )
+    plt.show()
 
 
 # Assuming `avg_similarities` is the dictionary returned by compute_avg_cosine_similarity_for_models function
