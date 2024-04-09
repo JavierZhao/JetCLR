@@ -291,10 +291,14 @@ avg_similarities = compute_avg_cosine_similarity_for_models(
     augmentation=augmentation,
 )
 # Save as CSV
+import json
+
 with open(f"{args.save_path}/avg_sim.csv", "w", newline="") as csvfile:
     writer = csv.writer(csvfile)
     for key, value in avg_similarities.items():
-        writer.writerow([key, value])
+        # Serialize the dictionary value to a JSON string
+        json_value = json.dumps(value)
+        writer.writerow([key, json_value])
 print(avg_similarities)
 
 class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
