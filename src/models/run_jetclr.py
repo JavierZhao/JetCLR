@@ -511,9 +511,12 @@ def main(args):
             desc="Training",
         )
         for _, batch in enumerate(pbar_t):
+            print(f"batch device: {batch.device}", flush=True, file=logfile)
             # batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
+            del batch
+            gc.collect()
             time1, time2, time3, time4, time5 = times
             time6 = time.time()
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
