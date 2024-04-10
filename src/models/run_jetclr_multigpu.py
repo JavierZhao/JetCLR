@@ -266,6 +266,9 @@ def main(args):
     val_sampler = DistributedSampler(
         val_dataset, num_replicas=args.world_size, rank=rank
     )
+    test_sampler = DistributedSampler(
+        test_dataset, num_replicas=args.world_size, rank=rank
+    )
     # load the test data
     test_dat_in, test_lab_in = test_dataset.fetch_entire_dataset()
     test_dat_1 = test_dat_in[: int(len(test_dat_in) / 2)]
@@ -443,13 +446,25 @@ def main(args):
         sampler=val_sampler,
     )
 
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+        pin_memory=True,
+        prefetch_factor=2,
+        sampler=test_sampler,
+    )
+    num_classes = 10  # Assuming classes are labeled 0 through 9
+    average_similarities = np.zeros((args.n_epochs, num_classes))
+
     l_val_best = 1000000  # initialise the best validation loss
     # the loop
     for epoch in range(args.n_epochs):
         log_info("epoch: " + str(epoch), flush=True, file=logfile)
         train_sampler.set_epoch(epoch)
         val_sampler.set_epoch(epoch)
-        print_device_info(net)
+        # print_device_info(net)
         # initialise timing stats
         te0 = time.time()
 
@@ -575,6 +590,59 @@ def main(args):
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
             loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
+
+        # calculate the average cosine similarity for each class
+        # initialize the arrays to store the average cosine similarities
+
+        avg_similarities = np.zeros(num_classes)
+        counts = np.zeros(num_classes, dtype=int)
+        with torch.no_grad():
+            net.eval()
+            total = int(len(test_dataset) / args.batch_size)
+            pbar_t = tqdm.tqdm(
+                test_loader,
+                total=total // 10,
+                desc=f"Inference for Epoch {epoch}",
+            )
+
+            for i, (batch_data, batch_labels) in enumerate(pbar_t):
+                # Process the batch here as described previously
+                if i == total // 10:
+                    break
+                batch_data = batch_data.to(
+                    args.device
+                )  # Assuming shape (batch_size, 7, 128)
+                batch_labels = batch_labels.to(
+                    args.device
+                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+                x_i, x_j, times = augmentation(args, batch_data)
+                batch_size = x_i.shape[0]
+                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                z_i = F.normalize(x_i, dim=1)
+                z_j = F.normalize(x_j, dim=1)
+                z = torch.cat([z_i, z_j], dim=0)
+                similarity_matrix = F.cosine_similarity(
+                    z.unsqueeze(1), z.unsqueeze(0), dim=2
+                )
+                sim_ij = torch.diag(similarity_matrix, batch_size)
+
+                # Convert batch_labels from one-hot to indices for easier processing
+                labels_indices = torch.argmax(batch_labels, dim=1)
+
+                # Iterate through each label index and append the corresponding sim_ij value
+                for label_idx in range(labels_indices.size(0)):
+                    label = labels_indices[label_idx].item()
+                    sim_value = sim_ij[label_idx].item()
+
+                    avg_similarities[label] += sim_value
+                    counts[label] += 1
+
+            average_similarities[epoch, :] = np.divide(
+                avg_similarities, counts, where=counts != 0
+            )
+        # save average similarities
+        np_save_checkpoint(expt_dir + "average_similarities.npy", average_similarities)
 
         log_info(
             "epoch: "
