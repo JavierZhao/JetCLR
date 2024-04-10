@@ -494,9 +494,8 @@ def main(args):
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=args.n_workers,
-        pin_memory=True,
-        prefetch_factor=2,
+        num_workers=0,
+        pin_memory=False,
         sampler=test_sampler,
     )
     num_classes = 10  # Assuming classes are labeled 0 through 9
