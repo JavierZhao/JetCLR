@@ -190,6 +190,17 @@ def plot_avg_cosine_similarities(args, avg_similarities):
     plt.close()
 
 
+def print_cuda_memory(logfile):
+    r = torch.cuda.memory_reserved(0)
+    a = torch.cuda.memory_allocated(0)
+    f = r - a  # free inside reserved
+    print(
+        f"CUDA memory: reserved {r/ np.power(1024,3)}G, allocated {a/ np.power(1024,3)}G, free {f/ np.power(1024,3)}G",
+        flush=True,
+        file=logfile,
+    )
+
+
 def main(args):
     t0 = time.time()
 
@@ -342,6 +353,8 @@ def main(args):
         file=logfile,
     )
     print("---------------", flush=True, file=logfile)
+    print("\nBefore loading model (nothing should be on GPU)", flush=True, file=logfile)
+    print_cuda_memory(logfile)
 
     # initialise the network
     print("\ninitialising the network", flush=True, file=logfile)
@@ -361,6 +374,8 @@ def main(args):
 
     # send network to device
     net.to(device)
+    print("\nAfter loading model (network should be on GPU)", flush=True, file=logfile)
+    print_cuda_memory(logfile)
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
@@ -427,6 +442,8 @@ def main(args):
     l_val_best = 1000000  # initialise the best validation loss
     # the loop
     for epoch in range(args.n_epochs):
+        print("beginning of epoch: " + str(epoch), flush=True, file=logfile)
+        print_cuda_memory(logfile)
         # initialise timing stats
         te0 = time.time()
 
@@ -446,60 +463,60 @@ def main(args):
         td7 = 0
         td8 = 0
 
-        # calculate the average cosine similarity for each class
-        # initialize the arrays to store the average cosine similarities
-        print("Calculating average cosine similarities", flush=True, file=logfile)
-        avg_similarities = np.zeros(num_classes)
-        counts = np.zeros(num_classes, dtype=int)
-        with torch.no_grad():
-            net.eval()
-            total = int(len(test_dataset) / args.batch_size)
-            pbar_t = tqdm.tqdm(
-                test_loader,
-                total=total // 10,
-                desc=f"Inference for Epoch {epoch}",
-            )
+        # # calculate the average cosine similarity for each class
+        # # initialize the arrays to store the average cosine similarities
+        # print("Calculating average cosine similarities", flush=True, file=logfile)
+        # avg_similarities = np.zeros(num_classes)
+        # counts = np.zeros(num_classes, dtype=int)
+        # with torch.no_grad():
+        #     net.eval()
+        #     total = int(len(test_dataset) / args.batch_size)
+        #     pbar_t = tqdm.tqdm(
+        #         test_loader,
+        #         total=total // 10,
+        #         desc=f"Inference for Epoch {epoch}",
+        #     )
 
-            for i, (batch_data, batch_labels) in enumerate(pbar_t):
-                if i == total // 10:
-                    break
-                batch_data = batch_data.to(
-                    args.device
-                )  # Assuming shape (batch_size, 7, 128)
-                batch_labels = batch_labels.to(
-                    args.device
-                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                x_i, x_j, times = augmentation(args, batch_data)
-                batch_size = x_i.shape[0]
-                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_i = F.normalize(x_i, dim=1)
-                z_j = F.normalize(x_j, dim=1)
-                z = torch.cat([z_i, z_j], dim=0)
-                similarity_matrix = F.cosine_similarity(
-                    z.unsqueeze(1), z.unsqueeze(0), dim=2
-                )
-                sim_ij = torch.diag(similarity_matrix, batch_size)
+        #     for i, (batch_data, batch_labels) in enumerate(pbar_t):
+        #         if i == total // 10:
+        #             break
+        #         batch_data = batch_data.to(
+        #             args.device
+        #         )  # Assuming shape (batch_size, 7, 128)
+        #         batch_labels = batch_labels.to(
+        #             args.device
+        #         )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+        #         x_i, x_j, times = augmentation(args, batch_data)
+        #         batch_size = x_i.shape[0]
+        #         x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+        #         x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+        #         z_i = F.normalize(x_i, dim=1)
+        #         z_j = F.normalize(x_j, dim=1)
+        #         z = torch.cat([z_i, z_j], dim=0)
+        #         similarity_matrix = F.cosine_similarity(
+        #             z.unsqueeze(1), z.unsqueeze(0), dim=2
+        #         )
+        #         sim_ij = torch.diag(similarity_matrix, batch_size)
 
-                # Convert batch_labels from one-hot to indices for easier processing
-                labels_indices = torch.argmax(batch_labels, dim=1)
+        #         # Convert batch_labels from one-hot to indices for easier processing
+        #         labels_indices = torch.argmax(batch_labels, dim=1)
 
-                # Iterate through each label index and append the corresponding sim_ij value
-                for label_idx in range(labels_indices.size(0)):
-                    label = labels_indices[label_idx].item()
-                    sim_value = sim_ij[label_idx].item()
+        #         # Iterate through each label index and append the corresponding sim_ij value
+        #         for label_idx in range(labels_indices.size(0)):
+        #             label = labels_indices[label_idx].item()
+        #             sim_value = sim_ij[label_idx].item()
 
-                    avg_similarities[label] += sim_value
-                    counts[label] += 1
+        #             avg_similarities[label] += sim_value
+        #             counts[label] += 1
 
-            average_similarities[epoch, :] = np.divide(
-                avg_similarities, counts, where=counts != 0
-            )
-        # save average similarities
-        np.save(expt_dir + "average_similarities.npy", average_similarities)
+        #     average_similarities[epoch, :] = np.divide(
+        #         avg_similarities, counts, where=counts != 0
+        #     )
+        # # save average similarities
+        # np.save(expt_dir + "average_similarities.npy", average_similarities)
 
-        # plot the average cosine similarities
-        plot_avg_cosine_similarities(args, average_similarities)
+        # # plot the average cosine similarities
+        # plot_avg_cosine_similarities(args, average_similarities)
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
@@ -511,16 +528,19 @@ def main(args):
             desc="Training",
         )
         for _, batch in enumerate(pbar_t):
-            print(f"batch device: {batch.device}", flush=True, file=logfile)
+            print(f"before loading batch onto gpu", flush=True, file=logfile)
+            print_cuda_memory(logfile)
             # batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
-            x_i, x_j, times = augmentation(args, batch)
-            del batch
-            gc.collect()
-            time1, time2, time3, time4, time5 = times
-            time6 = time.time()
+            x_i = batch.transpose(1, 2).to(args.device)
+            x_j = batch.transpose(1, 2).to(args.device)
+            print(f"after loading x_i and x_j onto gpu", flush=True, file=logfile)
+            print_cuda_memory(logfile)
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+            print(f"after forward pass", flush=True, file=logfile)
+            print_cuda_memory(logfile)
+            time6 = time.time()
             time7 = time.time()
             # calculate the alignment and uniformity loss for each batch
             loss_align = align_loss(z_i, z_j)
@@ -555,6 +575,9 @@ def main(args):
             td6 += time7 - time6
             td7 += time8 - time7
             td8 += time9 - time8
+
+            print(f"after loss calculation and backwards of", flush=True, file=logfile)
+            print_cuda_memory(logfile)
 
         loss_e = np.mean(np.array(losses_e))
         losses.append(loss_e)
