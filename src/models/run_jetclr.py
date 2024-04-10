@@ -567,14 +567,6 @@ def main(args):
             pbar_t.set_description(f"Training loss: {loss:.4f}")
 
             # update timiing stats
-            td1 += time2 - time1
-            td2 += time3 - time2
-            td3 += time4 - time3
-            td4 += time5 - time4
-            td5 += time6 - time5
-            td6 += time7 - time6
-            td7 += time8 - time7
-            td8 += time9 - time8
 
             print(f"after loss calculation and backwards of", flush=True, file=logfile)
             print_cuda_memory(logfile)
