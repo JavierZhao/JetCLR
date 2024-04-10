@@ -422,6 +422,7 @@ def main(args):
     args.device = device
     net.to(device)
     net = DDP(net, device_ids=[rank])
+    log_info("\nmodel initialised and sent to devices", flush=True, file=logfile)
 
     # set up the optimiser
     optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
