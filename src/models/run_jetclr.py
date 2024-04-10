@@ -639,11 +639,6 @@ def main(args):
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
-        print(
-            f"total time taken: {round( te1-te0, 1 )}s, augmentation: {round(td1+td2+td3+td4+td5,1)}s, forward {round(td6, 1)}s, backward {round(td8, 1)}s, other {round(te1-te0-(td1+td2+td3+td4+td6+td7+td8), 2)}s",
-            flush=True,
-            file=logfile,
-        )
 
         # check memory stats on the gpu
         if epoch % 10 == 0:
