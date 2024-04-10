@@ -134,10 +134,53 @@ def augmentation(args, x_i):
     return x_i, x_j, times
 
 
+class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
+
+
+def plot_avg_cosine_similarities(args, avg_similarities):
+    """
+    Plots the average cosine similarities for each class across epochs, using a NumPy array format for avg_similarities,
+    but only for epochs where the similarity is non-zero.
+
+    :param args: Arguments containing save_plot_path.
+    :param avg_similarities: NumPy array of average cosine similarities with shape [number_of_epochs, number_of_classes].
+    """
+    os.makedirs(args.save_plot_path, exist_ok=True)
+    # Initialize a figure
+    plt.figure(figsize=(10, 6))
+
+    epochs = np.arange(0, avg_similarities.shape[0])
+
+    # For each class, plot its average similarity across epochs if it's non-zero
+    for i, class_label in enumerate(class_labels):
+        avg_sims = avg_similarities[:, i]
+        # Filter epochs and similarities for non-zero values
+        non_zero_epochs = epochs[avg_sims != 0]
+        non_zero_sims = avg_sims[avg_sims != 0]
+
+        if (
+            non_zero_sims.size > 0
+        ):  # Check if there are any non-zero similarities to plot
+            plt.plot(non_zero_epochs, non_zero_sims, marker="o", label=class_label)
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Average Cosine Similarity")
+    plt.title("Average Cosine Similarity per Class Across Epochs")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(
+        os.path.join(args.save_plot_path, "avg_cosine_similarities.png"),
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
 def main(args):
     t0 = time.time()
 
     args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/JetClass/{args.person}-simCLR-{args.label}-log.txt"
+    args.save_plot_path = f"/ssl-jet-vol-v3/JetCLR/plots/cosine_similarity/{args.label}"
     args.n_heads = 4
     args.opt = "adam"
     args.learning_rate = 0.00005 * args.batch_size / 128
@@ -201,13 +244,13 @@ def main(args):
         load_labels=True,
     )
     # load the test data
-    test_dat_in, test_lab_in = test_dataset.fetch_entire_dataset()
-    test_dat_1 = test_dat_in[: int(len(test_dat_in) / 2)]
-    test_lab_1 = test_lab_in[: int(len(test_lab_in) / 2)]
-    test_dat_2 = test_dat_in[int(len(test_dat_in) / 2) :]
-    test_lab_2 = test_lab_in[int(len(test_lab_in) / 2) :]
-    del test_dat_in, test_lab_in
-    gc.collect()
+    # test_dat_in, test_lab_in = test_dataset.fetch_entire_dataset()
+    # test_dat_1 = test_dat_in[: int(len(test_dat_in) / 2)]
+    # test_lab_1 = test_lab_in[: int(len(test_lab_in) / 2)]
+    # test_dat_2 = test_dat_in[int(len(test_dat_in) / 2) :]
+    # test_lab_2 = test_lab_in[int(len(test_lab_in) / 2) :]
+    # del test_dat_in, test_lab_in
+    # gc.collect()
 
     input_dim = train_dataset.get_sample_shape()[0]
     print(f"input_dim: {input_dim}")
@@ -356,6 +399,16 @@ def main(args):
         pin_memory=True,
         prefetch_factor=2,
     )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.n_workers,
+        pin_memory=True,
+        prefetch_factor=2,
+    )
+    num_classes = 10  # Assuming classes are labeled 0 through 9
+    average_similarities = np.zeros((args.n_epochs, num_classes))
 
     l_val_best = 1000000  # initialise the best validation loss
     # the loop
@@ -378,6 +431,61 @@ def main(args):
         td6 = 0
         td7 = 0
         td8 = 0
+
+        # calculate the average cosine similarity for each class
+        # initialize the arrays to store the average cosine similarities
+        print("Calculating average cosine similarities", flush=True, file=logfile)
+        avg_similarities = np.zeros(num_classes)
+        counts = np.zeros(num_classes, dtype=int)
+        with torch.no_grad():
+            net.eval()
+            total = int(len(test_dataset) / args.batch_size)
+            pbar_t = tqdm.tqdm(
+                test_loader,
+                total=total // 10,
+                desc=f"Inference for Epoch {epoch}",
+            )
+
+            for i, (batch_data, batch_labels) in enumerate(pbar_t):
+                if i == total // 10:
+                    break
+                batch_data = batch_data.to(
+                    args.device
+                )  # Assuming shape (batch_size, 7, 128)
+                batch_labels = batch_labels.to(
+                    args.device
+                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+                x_i, x_j, times = augmentation(args, batch_data)
+                batch_size = x_i.shape[0]
+                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                z_i = F.normalize(x_i, dim=1)
+                z_j = F.normalize(x_j, dim=1)
+                z = torch.cat([z_i, z_j], dim=0)
+                similarity_matrix = F.cosine_similarity(
+                    z.unsqueeze(1), z.unsqueeze(0), dim=2
+                )
+                sim_ij = torch.diag(similarity_matrix, batch_size)
+
+                # Convert batch_labels from one-hot to indices for easier processing
+                labels_indices = torch.argmax(batch_labels, dim=1)
+
+                # Iterate through each label index and append the corresponding sim_ij value
+                for label_idx in range(labels_indices.size(0)):
+                    label = labels_indices[label_idx].item()
+                    sim_value = sim_ij[label_idx].item()
+
+                    avg_similarities[label] += sim_value
+                    counts[label] += 1
+
+            average_similarities[epoch, :] = np.divide(
+                avg_similarities, counts, where=counts != 0
+            )
+        # save average similarities
+        np.save(expt_dir + "average_similarities.npy", average_similarities)
+
+        # plot the average cosine similarities
+        plot_avg_cosine_similarities(args, average_similarities)
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
