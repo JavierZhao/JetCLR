@@ -530,7 +530,6 @@ def main(args):
 
         # calculate the average cosine similarity for each class
         # initialize the arrays to store the average cosine similarities
-        print("Calculating average cosine similarities", flush=True, file=logfile)
         avg_similarities = np.zeros(num_classes)
         counts = np.zeros(num_classes, dtype=int)
         with torch.no_grad():
