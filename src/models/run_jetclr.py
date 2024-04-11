@@ -533,9 +533,13 @@ def main(args):
             print_cuda_memory(logfile)
             # batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
-            x_i = batch.transpose(1, 2).to(args.device)
-            x_j = batch.transpose(1, 2).to(args.device)
-            print(f"after loading x_i and x_j onto gpu", flush=True, file=logfile)
+            x_i, x_j, times = augmentation(args, batch)
+            time1, time2, time3, time4, time5 = times
+            print(
+                f"after augmentation (loading x_i and x_j onto gpu)",
+                flush=True,
+                file=logfile,
+            )
             print_cuda_memory(logfile)
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -555,22 +559,29 @@ def main(args):
                 )
                 / 2
             )
+            print(
+                f"after align and uniformity loss calculation", flush=True, file=logfile
+            )
+            print_cuda_memory(logfile)
             time8 = time.time()
 
             # compute the loss, back-propagate, and update scheduler if required
             loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+            print(f"after contrastive loss calculation", flush=True, file=logfile)
+            print_cuda_memory(logfile)
             loss.backward()
+            print(f"after back prop", flush=True, file=logfile)
+            print_cuda_memory(logfile)
             net.optimizer.step()
             if args.opt == "sgdca":
                 scheduler.step(epoch + i / iters)
             losses_e.append(loss.detach().cpu().numpy())
             time9 = time.time()
             pbar_t.set_description(f"Training loss: {loss:.4f}")
+            print(f"end of batch", flush=True, file=logfile)
+            print_cuda_memory(logfile)
 
             # update timiing stats
-
-            print(f"after loss calculation and backwards of", flush=True, file=logfile)
-            print_cuda_memory(logfile)
 
         loss_e = np.mean(np.array(losses_e))
         losses.append(loss_e)
