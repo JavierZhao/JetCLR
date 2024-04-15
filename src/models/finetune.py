@@ -144,7 +144,7 @@ def main(args):
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
     # set up results directory
-    base_dir = "/ssl-jet-vol-v2/JetCLR/models/"
+    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
     expt_tag = (
         f"trial-{args.trial}-{args.ep}-{math.log10(args.num_samples)}-{args.label}"
     )
@@ -152,7 +152,7 @@ def main(args):
         expt_tag += "-fixed"
     expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
-    args.logfile = f"/ssl-jet-vol-v2/JetCLR/logs/finetuning/{expt_tag}.txt"
+    args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{expt_tag}.txt"
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
@@ -193,10 +193,10 @@ def main(args):
 
     print("loading data")
     args.num_files = args.num_samples // 100000 + 1
-    data = load_data("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
-    data_val = load_data("/ssl-jet-vol-v2/toptagging", "val", 1)
-    labels = load_labels("/ssl-jet-vol-v2/toptagging", "train", args.num_files)
-    labels_val = load_labels("/ssl-jet-vol-v2/toptagging", "val", 1)
+    data = load_data("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    data_val = load_data("/ssl-jet-vol-v3/toptagging", "val", 1)
+    labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
     tr_dat_in = tr_dat_in[0 : args.num_samples]
@@ -347,14 +347,24 @@ def main(args):
         # Load the pretrained model
         print("\nLoading the network", flush=True, file=logfile)
         if args.ep == -1:
-            load_path = f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/final_model.pt"
+            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/final_model.pt"
         elif args.ep == 0:
-            load_path = f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/model_best.pt"
+            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_best.pt"
         else:
             load_path = (
-                f"/ssl-jet-vol-v2/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
+                f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
             )
-        net.load_state_dict(torch.load(load_path))
+        if "4gpu" in args.label:
+            # Load the original state_dict
+            state_dict = torch.load(load_path)
+            
+            # Create a new state_dict without the 'module.' prefix
+            new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+            
+            # Load the new state_dict into your model
+            net.load_state_dict(new_state_dict)
+        else:
+            net.load_state_dict(torch.load(load_path))
         print(f"Loaded model from {load_path}", flush=True, file=logfile)
     # initialize the MLP projector
     finetune_mlp_dim = args.output_dim
@@ -581,7 +591,7 @@ if __name__ == "__main__":
         "--dataset-path",
         type=str,
         action="store",
-        default="/ssl-jet-vol-v2/toptagging/processed",
+        default="/ssl-jet-vol-v3/toptagging/processed",
         help="Input directory with the dataset",
     )
     parser.add_argument(
