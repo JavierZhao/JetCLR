@@ -62,7 +62,7 @@ def load_data(dataset_path, flag, n_files=-1):
     # make another variable that combines flag and subdirectory such as 3_features_raw
     path_id = f"{flag}-"
     if args.full_kinematics:
-        data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/data/*")
+        data_files = glob.glob(f"{dataset_path}/{flag}/processed/6_features_raw/data/*")
         path_id += "7_features_raw"
     elif args.raw_3:
         data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features_raw/data/*")
@@ -76,7 +76,7 @@ def load_data(dataset_path, flag, n_files=-1):
         if args.full_kinematics:
             data.append(
                 np.load(
-                    f"{dataset_path}/{flag}/processed/7_features_raw/data/data_{i}.npy"
+                    f"{dataset_path}/{flag}/processed/6_features_raw/data/data_{i}.npy"
                 )
             )
         elif args.raw_3:
@@ -100,13 +100,13 @@ def load_data(dataset_path, flag, n_files=-1):
 
 
 def load_labels(dataset_path, flag, n_files=-1):
-    data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/labels/*")
+    data_files = glob.glob(f"{dataset_path}/{flag}/processed/6_features_raw/labels/*")
 
     data = []
     for i, file in enumerate(data_files):
         data.append(
             np.load(
-                f"{dataset_path}/{flag}/processed/7_features_raw/labels/labels_{i}.npy"
+                f"{dataset_path}/{flag}/processed/6_features_raw/labels/labels_{i}.npy"
             )
         )
         print(f"--- loaded label file {i} from `{flag}` directory")
