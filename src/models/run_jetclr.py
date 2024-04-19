@@ -22,12 +22,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 # load custom modules required for jetCLR training
-from src.modules.jet_augs import (
-    rotate_jets,
-    distort_jets,
-    translate_jets,
-    collinear_fill_jets,
-)
+# from src.modules.jet_augs import (
+#     rotate_jets,
+#     distort_jets,
+#     translate_jets,
+#     collinear_fill_jets,
+# )
 from src.modules.transformer import Transformer
 from src.modules.losses import contrastive_loss, align_loss, uniform_loss
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
@@ -36,8 +36,7 @@ from src.modules.dataset import JetClassDataset
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
 
-
-def augmentation(args, x_i):
+def augmentation_cpu(args, x_i):
     x_i = x_i.cpu().numpy()
     # x_i has shape (batch_size, 7, n_constit)
     # dim 1 ordering: 'part_eta','part_phi','part_pt_log', 'part_e_log', 'part_logptrel', 'part_logerel','part_deltaR'
@@ -47,23 +46,18 @@ def augmentation(args, x_i):
     eta = x_i[:, 0, :]
     phi = x_i[:, 1, :]
     x_i = np.stack([pT, eta, phi], 1)  # (batch_size, 3, n_constit)
-    time1 = time.time()
     x_i = rotate_jets(x_i)
     x_j = x_i.copy()
     if args.rot:
         x_j = rotate_jets(x_j)
-    time2 = time.time()
     if args.cf:
         x_j = collinear_fill_jets(x_j)
         x_j = collinear_fill_jets(x_j)
-    time3 = time.time()
     if args.ptd:
         x_j = distort_jets(x_j, strength=args.ptst, pT_clip_min=args.ptcm)
-    time4 = time.time()
     if args.trs:
         x_j = translate_jets(x_j, width=args.trsw)
         x_i = translate_jets(x_i, width=args.trsw)
-    time5 = time.time()
     # recalculate the rest of the features after augmentation
     pT_i = x_i[:, 0, :]
     eta_i = x_i[:, 1, :]
@@ -130,9 +124,88 @@ def augmentation(args, x_i):
     )  # (batch_size, 6, n_constit)
     x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
     x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
-    times = [time1, time2, time3, time4, time5]
-    return x_i, x_j, times
+    return x_i, x_j
 
+def augmentation_gpu(args, x_i):
+    device = args.device
+    # Assuming x_i is a PyTorch tensor on the appropriate device
+    # x_i has shape (batch_size, 7, n_constit)
+    # Extract the (pT, eta, phi) features for augmentations
+    log_pT = x_i[:, 2, :]
+    pT = torch.where(log_pT != 0, torch.exp(log_pT), torch.zeros_like(log_pT))
+    eta = x_i[:, 0, :]
+    phi = x_i[:, 1, :]
+    x_i = torch.stack([pT, eta, phi], dim=1)  # (batch_size, 3, n_constit)
+    
+    x_i = rotate_jets(x_i, device)
+    x_j = x_i.clone()
+    if args.rot:
+        x_j = rotate_jets(x_j, device)
+    if args.cf:
+        x_j = collinear_fill_jets(x_j, device)
+        x_j = collinear_fill_jets(x_j, device)
+    if args.ptd:
+        x_j = distort_jets(x_j, device, strength=args.ptst, pT_clip_min=args.ptcm)
+    if args.trs:
+        x_j = translate_jets(x_j, device, width=args.trsw)
+        x_i = translate_jets(x_i, device, width=args.trsw)
+    
+    torch.cuda.synchronize()  # Ensure all operations are completed
+
+    # Recalculate the rest of the features after augmentation
+    # pT logs
+    # pT_log_i = torch.log(torch.clamp(x_i[:, 0, :], min=1e-6))
+    # pT_log_j = torch.log(torch.clamp(x_j[:, 0, :], min=1e-6))
+    pT_log_i = torch.where(x_i[:, 0, :] != 0, torch.log(x_i[:, 0, :]), 0)
+    pT_log_j = torch.where(x_j[:, 0, :] != 0, torch.log(x_j[:, 0, :]), 0)
+
+    # pTrel
+    pT_sum_i = x_i[:, 0, :].sum(dim=-1, keepdim=True)
+    pT_sum_j = x_j[:, 0, :].sum(dim=-1, keepdim=True)
+    pt_rel_i = x_i[:, 0, :] / pT_sum_i
+    pt_rel_j = x_j[:, 0, :] / pT_sum_j
+    pt_rel_log_i = torch.log(torch.clamp(pt_rel_i, min=1e-6))
+    pt_rel_log_j = torch.log(torch.clamp(pt_rel_j, min=1e-6))
+
+    # E
+    E_i = x_i[:, 0, :] * torch.cosh(x_i[:, 1, :])
+    E_j = x_j[:, 0, :] * torch.cosh(x_j[:, 1, :])
+    E_log_i = torch.log(torch.clamp(E_i, min=1e-6))
+    E_log_j = torch.log(torch.clamp(E_j, min=1e-6))
+
+    # Erel
+    E_sum_i = E_i.sum(dim=-1, keepdim=True)
+    E_sum_j = E_j.sum(dim=-1, keepdim=True)
+    E_rel_i = E_i / E_sum_i
+    E_rel_j = E_j / E_sum_j
+    E_rel_log_i = torch.log(torch.clamp(E_rel_i, min=1e-6))
+    E_rel_log_j = torch.log(torch.clamp(E_rel_j, min=1e-6))
+
+    # Stack them to obtain the final augmented data
+    x_i = torch.stack(
+        [
+            x_i[:, 1, :],  # eta_i
+            x_i[:, 2, :],  # phi_i
+            pT_log_i,
+            E_log_i,
+            pt_rel_log_i,
+            E_rel_log_i,
+        ],
+        1,
+    ).transpose(1, 2)  # (batch_size, 6, n_constit)
+
+    x_j = torch.stack(
+        [
+            x_j[:, 1, :],  # eta_j
+            x_j[:, 2, :],  # phi_j
+            pT_log_j,
+            E_log_j,
+            pt_rel_log_j,
+            E_rel_log_j,
+        ],
+        1,
+    ).transpose(1, 2)  # (batch_size, 6, n_constit)
+    return x_i, x_j
 
 class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
 
@@ -188,6 +261,12 @@ def main(args):
     # initialise logfile
     logfile = open(args.logfile, "a")
     print("logfile initialised", file=logfile, flush=True)
+    if args.aug_device == "cpu":
+        augmentation = augmentation_cpu
+        print("Running augmentations on cpu ", file=logfile, flush=True)
+    else:
+        augmentation = augmentation_gpu
+        print("Running augmentations on cuda ", file=logfile, flush=True)
     # print number of workers
     print("number of workers: " + str(args.n_workers), file=logfile, flush=True)
 
@@ -455,7 +534,7 @@ def main(args):
                 batch_labels = batch_labels.to(
                     args.device
                 )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                x_i, x_j, times = augmentation(args, batch_data)
+                x_i, x_j = augmentation(args, batch_data)
                 batch_size = x_i.shape[0]
                 x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
                 x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -500,7 +579,6 @@ def main(args):
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
-            time1, time2, time3, time4, time5 = times
             time6 = time.time()
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -841,6 +919,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # new arguments
     parser.add_argument(
+        "--aug-device",
+        type=str,
+        action="store",
+        dest="aug_device",
+        default="cpu",
+        help="device to run augmentations on (cpu or gpu)",
+    )
+    parser.add_argument(
         "--person",
         type=str,
         action="store",
@@ -1019,6 +1105,23 @@ if __name__ == "__main__":
         default=1.0,
         help="width param in translate_jets",
     )
+    
 
     args = parser.parse_args()
+    if args.aug_device == "cpu":
+        print("Using cpu version of augmentation")
+        from src.modules.jet_augs import (
+        rotate_jets,
+        distort_jets,
+        translate_jets,
+        collinear_fill_jets,
+        )
+    else:
+        print("Using gpu version of augmentation")
+        from src.modules.jet_augs_gpu import (
+        rotate_jets,
+        distort_jets,
+        translate_jets,
+        collinear_fill_jets,
+        )
     main(args)
