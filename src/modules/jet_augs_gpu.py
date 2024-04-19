@@ -134,32 +134,55 @@ def distort_jets(batch, device, strength=0.1, pT_clip_min=0.1):
     shift = torch.stack([zeros_tensor, shift_eta, shift_phi], dim=1).to(device)
     return batch + shift
 
-def collinear_fill_jets(batch, device):
-    """
+# def collinear_fill_jets(batch, device):
+#     """
+#     Input: batch of jets, shape (batchsize, 3, n_constit)
+#     dim 1 ordering: (pT, eta, phi)
+#     Output: batch of jets with collinear splittings, the function attempts to fill as many of the zero-padded args.nconstit
+#     entries with collinear splittings of the constituents by splitting each constituent at most once, same shape as input
+#     """
+#     batchb = batch.clone()
+#     nc = batch.shape[2]  # number of constituents
+#     # nzs = torch.sum(batch[:, 0, :] != 0.0, dim=1)  # number of non-zero elements
+#     nzs = torch.tensor( [ torch.where( batch[:,0,:][i]>0.0)[0].shape[0] for i in range(len(batch)) ] )
+
+#     for k in range(len(batch)):
+#         zs1 = min(nzs[k].item(), nc - nzs[k].item())  # number of zero padded entries to fill
+#         if zs1 > 0:
+#             els = torch.multinomial(input=torch.ones(nzs[k], device=device), num_samples=zs1, replacement=False)
+#             rs = torch.rand(zs1, device=device)  # scaling factor
+
+#             for j in range(zs1):
+#                 # split pT
+#                 index = els[j].item()
+#                 pT_original = batch[k, 0, index]
+#                 batchb[k, 0, index] = rs[j] * pT_original
+#                 batchb[k, 0, nzs[k] + j] = (1 - rs[j]) * pT_original
+#                 # keep eta and phi the same
+#                 batchb[k, 1, nzs[k] + j] = batch[k, 1, index]
+#                 batchb[k, 2, nzs[k] + j] = batch[k, 2, index]
+
+#     return batchb.to(device)
+
+def collinear_fill_jets( batch, device ):
+    '''
     Input: batch of jets, shape (batchsize, 3, n_constit)
     dim 1 ordering: (pT, eta, phi)
     Output: batch of jets with collinear splittings, the function attempts to fill as many of the zero-padded args.nconstit
     entries with collinear splittings of the constituents by splitting each constituent at most once, same shape as input
-    """
-    batchb = batch.clone()
-    nc = batch.shape[2]  # number of constituents
-    nzs = torch.sum(batch[:, 0, :] != 0.0, dim=1)  # number of non-zero elements
-
+    '''
+    batch = batch.cpu().numpy()
+    batchb = batch.copy()
+    nc = batch.shape[2]
+    nzs = np.array( [ np.where( batch[:,0,:][i]>0.0)[0].shape[0] for i in range(len(batch)) ] )
     for k in range(len(batch)):
-        zs1 = min(nzs[k].item(), nc - nzs[k].item())  # number of zero padded entries to fill
-        if zs1 > 0:
-            els = torch.multinomial(input=torch.ones(nzs[k], device=device), num_samples=zs1, replacement=False)
-            rs = torch.rand(zs1, device=device)  # scaling factor
-
-            for j in range(zs1):
-                # split pT
-                index = els[j].item()
-                pT_original = batch[k, 0, index]
-                batchb[k, 0, index] = rs[j] * pT_original
-                batchb[k, 0, nzs[k] + j] = (1 - rs[j]) * pT_original
-                # keep eta and phi the same
-                batchb[k, 1, nzs[k] + j] = batch[k, 1, index]
-                batchb[k, 2, nzs[k] + j] = batch[k, 2, index]
-
-    return batchb.to(device)
-
+        nzs1 = np.max( [ nzs[k], int(nc/2) ] )
+        zs1 = int(nc-nzs1)
+        els = np.random.choice( np.linspace(0,nzs1-1,nzs1), size=zs1, replace=False )
+        rs = np.random.uniform( size=zs1 )
+        for j in range(zs1):
+            batchb[k,0,int(els[j])] = rs[j]*batch[k,0,int(els[j])]
+            batchb[k,0,int(nzs[k]+j)] = (1-rs[j])*batch[k,0,int(els[j])]
+            batchb[k,1,int(nzs[k]+j)] = batch[k,1,int(els[j])]
+            batchb[k,2,int(nzs[k]+j)] = batch[k,2,int(els[j])]
+    return torch.tensor(batchb).to(device)
