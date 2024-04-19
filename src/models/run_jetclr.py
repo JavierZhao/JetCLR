@@ -502,15 +502,12 @@ def main(args):
         losses_e_val = []
 
         # initialise timing stats
-        td1 = 0
-        td2 = 0
-        td3 = 0
-        td4 = 0
-        td5 = 0
-        td6 = 0
-        td7 = 0
-        td8 = 0
+        td_aug = 0
+        td_forward = 0
+        td_loss = 0
+        td_backward = 0
 
+        t_cos_sim_start = time.time()
         # calculate the average cosine similarity for each class
         # initialize the arrays to store the average cosine similarities
         print("Calculating average cosine similarities", flush=True, file=logfile)
@@ -565,6 +562,8 @@ def main(args):
 
         # plot the average cosine similarities
         plot_avg_cosine_similarities(args, average_similarities)
+        t_cos_sim_end = time.time()
+        td_cos_sim = t_cos_sim_end - t_cos_sim_start
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
@@ -576,13 +575,14 @@ def main(args):
             desc="Training",
         )
         for _, batch in enumerate(pbar_t):
+            time1 = time.time()
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
             x_i, x_j, times = augmentation(args, batch)
-            time6 = time.time()
+            time2 = time.time()
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-            time7 = time.time()
+            time3 = time.time()
             # calculate the alignment and uniformity loss for each batch
             loss_align = align_loss(z_i, z_j)
             loss_uniform_zi = uniform_loss(z_i)
@@ -595,7 +595,7 @@ def main(args):
                 )
                 / 2
             )
-            time8 = time.time()
+            time4 = time.time()
 
             # compute the loss, back-propagate, and update scheduler if required
             loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
@@ -604,18 +604,14 @@ def main(args):
             if args.opt == "sgdca":
                 scheduler.step(epoch + i / iters)
             losses_e.append(loss.detach().cpu().numpy())
-            time9 = time.time()
+            time5 = time.time()
             pbar_t.set_description(f"Training loss: {loss:.4f}")
 
             # update timiing stats
-            td1 += time2 - time1
-            td2 += time3 - time2
-            td3 += time4 - time3
-            td4 += time5 - time4
-            td5 += time6 - time5
-            td6 += time7 - time6
-            td7 += time8 - time7
-            td8 += time9 - time8
+            td_aug += time2 - time1
+            td_forward += time3 - time2
+            td_loss += time4 - time3
+            td_backward += time5 - time4
 
         loss_e = np.mean(np.array(losses_e))
         losses.append(loss_e)
@@ -623,10 +619,9 @@ def main(args):
         if args.opt == "sgdslr":
             scheduler.step()
 
-        te1 = time.time()
-
         # calculate validation loss at the end of the epoch
 
+        t_val_start = time.time()
         with torch.no_grad():
             net.eval()
             pbar_v = tqdm.tqdm(
@@ -646,6 +641,8 @@ def main(args):
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
             loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
+        t_val_end = time.time()
+        td_val = t_val_end - t_val_start
 
         print(
             "epoch: "
@@ -682,11 +679,18 @@ def main(args):
             flush=True,
             file=logfile,
         )
+        te1 = time.time()
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
         print(
-            f"total time taken: {round( te1-te0, 1 )}s, augmentation: {round(td1+td2+td3+td4+td5,1)}s, forward {round(td6, 1)}s, backward {round(td8, 1)}s, other {round(te1-te0-(td1+td2+td3+td4+td6+td7+td8), 2)}s",
+            f"total time taken: {round( te1-te0, 1 )}s, 
+            cosine similarity: {round(td_cos_sim), 1}s, 
+            augmentation: {round(td_aug,1)}s, 
+            forward {round(td_forward, 1)}s, 
+            loss {round(td_loss, 1)}s, 
+            backward {round(td_backward, 1)}s, 
+            validation {round(td_val, 1)}s",
             flush=True,
             file=logfile,
         )
