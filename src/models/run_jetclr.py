@@ -36,6 +36,7 @@ from src.modules.dataset import JetClassDataset
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
 
+
 def augmentation_cpu(args, x_i):
     x_i = x_i.cpu().numpy()
     # x_i has shape (batch_size, 7, n_constit)
@@ -126,6 +127,7 @@ def augmentation_cpu(args, x_i):
     x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
     return x_i, x_j
 
+
 def augmentation_gpu(args, x_i):
     device = args.device
     # Assuming x_i is a PyTorch tensor on the appropriate device
@@ -136,7 +138,7 @@ def augmentation_gpu(args, x_i):
     eta = x_i[:, 0, :]
     phi = x_i[:, 1, :]
     x_i = torch.stack([pT, eta, phi], dim=1)  # (batch_size, 3, n_constit)
-    
+
     x_i = rotate_jets(x_i, device)
     x_j = x_i.clone()
     if args.rot:
@@ -149,7 +151,7 @@ def augmentation_gpu(args, x_i):
     if args.trs:
         x_j = translate_jets(x_j, device, width=args.trsw)
         x_i = translate_jets(x_i, device, width=args.trsw)
-    
+
     torch.cuda.synchronize()  # Ensure all operations are completed
 
     # Recalculate the rest of the features after augmentation
@@ -192,7 +194,9 @@ def augmentation_gpu(args, x_i):
             E_rel_log_i,
         ],
         1,
-    ).transpose(1, 2)  # (batch_size, 6, n_constit)
+    ).transpose(
+        1, 2
+    )  # (batch_size, 6, n_constit)
 
     x_j = torch.stack(
         [
@@ -204,8 +208,11 @@ def augmentation_gpu(args, x_i):
             E_rel_log_j,
         ],
         1,
-    ).transpose(1, 2)  # (batch_size, 6, n_constit)
+    ).transpose(
+        1, 2
+    )  # (batch_size, 6, n_constit)
     return x_i, x_j
+
 
 class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
 
@@ -683,7 +690,8 @@ def main(args):
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
-        print(f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim), 1}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
+        print(
+            f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim), 1}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
             flush=True,
             file=logfile,
         )
@@ -1102,23 +1110,22 @@ if __name__ == "__main__":
         default=1.0,
         help="width param in translate_jets",
     )
-    
 
     args = parser.parse_args()
     if args.aug_device == "cpu":
         print("Using cpu version of augmentation")
         from src.modules.jet_augs import (
-        rotate_jets,
-        distort_jets,
-        translate_jets,
-        collinear_fill_jets,
+            rotate_jets,
+            distort_jets,
+            translate_jets,
+            collinear_fill_jets,
         )
     else:
         print("Using gpu version of augmentation")
         from src.modules.jet_augs_gpu import (
-        rotate_jets,
-        distort_jets,
-        translate_jets,
-        collinear_fill_jets,
+            rotate_jets,
+            distort_jets,
+            translate_jets,
+            collinear_fill_jets,
         )
     main(args)
