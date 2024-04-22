@@ -585,7 +585,7 @@ def main(args):
             time1 = time.time()
             batch = batch.to(args.device)  # shape (batch_size, 7, 128)
             net.optimizer.zero_grad()
-            x_i, x_j, times = augmentation(args, batch)
+            x_i, x_j = augmentation(args, batch)
             time2 = time.time()
             z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
             z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -639,8 +639,7 @@ def main(args):
             for _, batch in enumerate(pbar_v):
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
                 net.optimizer.zero_grad()
-                y_i, y_j, times = augmentation(args, batch)
-                time1, time2, time3, time4, time5 = times
+                y_i, y_j = augmentation(args, batch)
                 z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
                 z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
                 val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
