@@ -433,6 +433,7 @@ def main(args):
 
     # send network to device
     net.to(device)
+    print(net, flush=True, file=logfile)
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
@@ -691,7 +692,7 @@ def main(args):
             print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
         print(
             f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim, 1)}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
-            flush=True,
+            flush=True
             file=logfile,
         )
 
