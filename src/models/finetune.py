@@ -391,6 +391,7 @@ def main(args):
 
     l_val_best = 99999
     acc_val_best = 0
+    rej_val_best = 0
 
     softmax = torch.nn.Softmax(dim=1)
     loss_train_all = []
@@ -527,12 +528,31 @@ def main(args):
                 f"{expt_dir}validation_predicted_vals_acc.npy",
                 predicted,
             )
-            # calculate the AUC and imtafe and output to the logfile
-            auc, imtafe = get_perf_stats(target, predicted[:, 1])
+        # calculate the AUC and imtafe and output to the logfile
+        auc, imtafe = get_perf_stats(target, predicted[:, 1])
+
+        if imtafe > rej_val_best:
+            print("new highest val rejection", flush=True, file=logfile)
             print(
                 f"epoch: {epoch}, AUC: {auc}, IMTAFE: {imtafe}",
                 flush=True,
                 file=logfile,
+            )
+            rej_val_best = imtafe
+            if args.finetune:
+                torch.save(
+                    net.state_dict(), expt_dir + "simclr_finetune_best_rej" + ".pt"
+                )
+            torch.save(
+                proj.state_dict(), expt_dir + "projector_finetune_best_rej" + ".pt"
+            )
+            np.save(
+                f"{expt_dir}validation_target_vals_rej.npy",
+                target,
+            )
+            np.save(
+                f"{expt_dir}validation_predicted_vals_rej.npy",
+                predicted,
             )
 
         # save all losses and accuracies
