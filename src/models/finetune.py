@@ -64,6 +64,9 @@ def load_data(dataset_path, flag, n_files=-1):
     if args.full_kinematics:
         data_files = glob.glob(f"{dataset_path}/{flag}/processed/7_features_raw/data/*")
         path_id += "7_features_raw"
+    elif args.six_features:
+        data_files = glob.glob(f"{dataset_path}/{flag}/processed/6_features_raw/data/*")
+        path_id += "6_features"
     elif args.raw_3:
         data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features_raw/data/*")
         path_id += "3_features_raw"
@@ -77,6 +80,12 @@ def load_data(dataset_path, flag, n_files=-1):
             data.append(
                 np.load(
                     f"{dataset_path}/{flag}/processed/7_features_raw/data/data_{i}.npy"
+                )
+            )
+        elif args.six_features:
+            data.append(
+                np.load(
+                    f"{dataset_path}/{flag}/processed/6_features_raw/data/data_{i}.npy"
                 )
             )
         elif args.raw_3:
@@ -140,6 +149,7 @@ def get_perf_stats(labels, measures):
 def main(args):
     t0 = time.time()
     print(f"full_kinematics: {args.full_kinematics}")
+    print(f"six_features: {args.six_features}")
     print(f"raw_3: {args.raw_3}")
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
@@ -291,10 +301,9 @@ def main(args):
 
     t1 = time.time()
 
-    # re-scale test data, for the training data this will be done on the fly due to the augmentations
-    if not args.full_kinematics:
-        test_dat_1 = rescale_pts(test_dat_1)
-        test_dat_2 = rescale_pts(test_dat_2)
+    # if not args.full_kinematics:
+    #     test_dat_1 = rescale_pts(test_dat_1)
+    #     test_dat_2 = rescale_pts(test_dat_2)
 
     print(
         "time taken to load and preprocess data: "
@@ -341,7 +350,7 @@ def main(args):
         args.n_head_layers,
         dropout=0.1,
         opt=args.opt,
-        log=args.full_kinematics,
+        log=args.full_kinematics or args.six_features,
     )
     if "from_scratch" not in args.label:
         # Load the pretrained model
@@ -404,6 +413,7 @@ def main(args):
         indices_list_val = torch.split(torch.randperm(vl_dat.shape[0]), args.batch_size)
 
         # initialise timing stats
+        te_start = time.time()
         te0 = time.time()
 
         # initialise lists to store batch stats
@@ -460,7 +470,6 @@ def main(args):
         print(
             f"validation done in {round(te1-te0, 1)} seconds", flush=True, file=logfile
         )
-        te0 = time.time()
 
         print(
             "epoch: "
@@ -569,9 +578,9 @@ def main(args):
             f"{expt_dir}acc_val.npy",
             np.array(acc_val_all),
         )
-        te1 = time.time()
+        te_end = time.time()
         print(
-            f"epoch {epoch} done in {round(te1-te0, 1)} seconds",
+            f"epoch {epoch} done in {round(te_end - te_start, 1)} seconds",
             flush=True,
             file=logfile,
         )
@@ -809,8 +818,16 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="full_kinematics",
-        default=1,
+        default=0,
         help="use the full 7 kinematic features instead of just 3",
+    )
+    parser.add_argument(
+        "--six-features",
+        type=int,
+        action="store",
+        dest="six_features",
+        default=1,
+        help="use the 6 kinematic features without delta R",
     )
     parser.add_argument(
         "--raw-3",
