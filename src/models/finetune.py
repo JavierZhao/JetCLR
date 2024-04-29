@@ -460,6 +460,7 @@ def main(args):
         print(
             f"validation done in {round(te1-te0, 1)} seconds", flush=True, file=logfile
         )
+        te0 = time.time()
 
         print(
             "epoch: "
@@ -567,6 +568,12 @@ def main(args):
         np.save(
             f"{expt_dir}acc_val.npy",
             np.array(acc_val_all),
+        )
+        te1 = time.time()
+        print(
+            f"epoch {epoch} done in {round(te1-te0, 1)} seconds",
+            flush=True,
+            file=logfile,
         )
 
     # Training done
