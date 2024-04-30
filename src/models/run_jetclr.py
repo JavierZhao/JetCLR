@@ -947,6 +947,14 @@ if __name__ == "__main__":
         help="percentage of data to use for training",
     )
     parser.add_argument(
+        "--new-loss",
+        type=int,
+        action="store",
+        dest="new_loss",
+        default=0,
+        help="whether to use the new loss function",
+    )
+    parser.add_argument(
         "--n-workers",
         type=int,
         action="store",
