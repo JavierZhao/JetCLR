@@ -29,7 +29,12 @@ from torch.utils.data import DataLoader
 #     collinear_fill_jets,
 # )
 from src.modules.transformer import Transformer
-from src.modules.losses import contrastive_loss, align_loss, uniform_loss
+from src.modules.losses import (
+    contrastive_loss,
+    align_loss,
+    uniform_loss,
+    contrastive_loss_new,
+)
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
 from src.modules.dataset import JetClassDataset
 
@@ -606,7 +611,10 @@ def main(args):
             time4 = time.time()
 
             # compute the loss, back-propagate, and update scheduler if required
-            loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+            if args.new_loss:
+                loss = contrastive_loss_new(z_i, z_j, args.temperature).to(device)
+            else:
+                loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
             loss.backward()
             net.optimizer.step()
             if args.opt == "sgdca":
