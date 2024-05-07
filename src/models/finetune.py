@@ -169,7 +169,8 @@ def main(args):
         args.logfile = (
             f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{args.group_tag}/{expt_tag}.txt"
         )
-    args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{expt_tag}.txt"
+    else:
+        args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{expt_tag}.txt"
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
