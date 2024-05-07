@@ -160,8 +160,15 @@ def main(args):
     )
     if not args.finetune:
         expt_tag += "-fixed"
-    expt_dir = base_dir + "finetuning/" + expt_tag + "/"
+    if args.group_tag:
+        expt_dir = base_dir + "finetuning/" + args.group_tag + "/" + expt_tag + "/"
+    else:
+        expt_dir = base_dir + "finetuning/" + expt_tag + "/"
 
+    if args.group_tag:
+        args.logfile = (
+            f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{args.group_tag}/{expt_tag}.txt"
+        )
     args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{expt_tag}.txt"
     args.nconstit = 50
     args.n_heads = 4
@@ -732,6 +739,14 @@ if __name__ == "__main__":
         dest="label",
         default="new",
         help="label of the model to load",
+    )
+    parser.add_argument(
+        "--group-tag",
+        type=str,
+        action="store",
+        dest="group_tag",
+        default="",
+        help="tag of the experiment group",
     )
     parser.add_argument(
         "--ep",
