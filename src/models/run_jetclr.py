@@ -571,7 +571,8 @@ def main(args):
                 avg_similarities, counts, where=counts != 0
             )
         # save average similarities
-        np.save(expt_dir + "average_similarities.npy", average_similarities)
+        if epoch != 0:
+            np.save(expt_dir + "average_similarities.npy", average_similarities)
 
         # plot the average cosine similarities
         plot_avg_cosine_similarities(args, average_similarities)
