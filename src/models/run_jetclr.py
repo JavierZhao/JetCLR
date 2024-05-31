@@ -21,8 +21,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
 from torch.utils.tensorboard import SummaryWriter
+from torch.profiler import (
+    profile,
+    record_function,
+    ProfilerActivity,
+    tensorboard_trace_handler,
+)
 
 # load custom modules required for jetCLR training
 # from src.modules.jet_augs import (
@@ -512,10 +517,11 @@ def main(args):
     # the loop
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-        on_trace_ready=tensorboard_trace_handler(f"./logs/profile/{args.label}"),
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3),
+        on_trace_ready=tensorboard_trace_handler(writer.log_dir),
         record_shapes=True,
         profile_memory=True,
+        with_stack=True,
     ) as prof:
         for epoch in range(args.n_epochs):
             # initialise timing stats
@@ -602,46 +608,49 @@ def main(args):
                 desc="Training",
             )
             for _, batch in enumerate(pbar_t):
-                time1 = time.time()
-                batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                net.optimizer.zero_grad()
-                x_i, x_j = augmentation(args, batch)
-                time2 = time.time()
-                z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                time3 = time.time()
-                # calculate the alignment and uniformity loss for each batch
-                loss_align = align_loss(z_i, z_j)
-                loss_uniform_zi = uniform_loss(z_i)
-                loss_uniform_zj = uniform_loss(z_j)
-                loss_align_e.append(loss_align.detach().cpu().numpy())
-                loss_uniform_e.append(
-                    (
-                        loss_uniform_zi.detach().cpu().numpy()
-                        + loss_uniform_zj.detach().cpu().numpy()
+                with record_function("model_training"):
+                    time1 = time.time()
+                    batch = batch.to(args.device)  # shape (batch_size, 7, 128)
+                    net.optimizer.zero_grad()
+                    x_i, x_j = augmentation(args, batch)
+                    time2 = time.time()
+                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    time3 = time.time()
+                    # calculate the alignment and uniformity loss for each batch
+                    loss_align = align_loss(z_i, z_j)
+                    loss_uniform_zi = uniform_loss(z_i)
+                    loss_uniform_zj = uniform_loss(z_j)
+                    loss_align_e.append(loss_align.detach().cpu().numpy())
+                    loss_uniform_e.append(
+                        (
+                            loss_uniform_zi.detach().cpu().numpy()
+                            + loss_uniform_zj.detach().cpu().numpy()
+                        )
+                        / 2
                     )
-                    / 2
-                )
-                time4 = time.time()
+                    time4 = time.time()
 
-                # compute the loss, back-propagate, and update scheduler if required
-                if args.new_loss:
-                    loss = contrastive_loss_new(z_i, z_j, args.temperature).to(device)
-                else:
-                    loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
-                loss.backward()
-                net.optimizer.step()
-                if args.opt == "sgdca":
-                    scheduler.step(epoch + i / iters)
-                losses_e.append(loss.detach().cpu().numpy())
-                time5 = time.time()
-                pbar_t.set_description(f"Training loss: {loss:.4f}")
+                    # compute the loss, back-propagate, and update scheduler if required
+                    if args.new_loss:
+                        loss = contrastive_loss_new(z_i, z_j, args.temperature).to(
+                            device
+                        )
+                    else:
+                        loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+                    loss.backward()
+                    net.optimizer.step()
+                    if args.opt == "sgdca":
+                        scheduler.step(epoch + i / iters)
+                    losses_e.append(loss.detach().cpu().numpy())
+                    time5 = time.time()
+                    pbar_t.set_description(f"Training loss: {loss:.4f}")
 
-                # update timiing stats
-                td_aug += time2 - time1
-                td_forward += time3 - time2
-                td_loss += time4 - time3
-                td_backward += time5 - time4
+                    # update timiing stats
+                    td_aug += time2 - time1
+                    td_forward += time3 - time2
+                    td_loss += time4 - time3
+                    td_backward += time5 - time4
 
                 # Log training loss to TensorBoard
                 writer.add_scalar(
