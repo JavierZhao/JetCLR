@@ -21,7 +21,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-import torch.profiler as profiler
+from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
 from torch.utils.tensorboard import SummaryWriter
 
 # load custom modules required for jetCLR training
@@ -510,15 +510,12 @@ def main(args):
     writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
 
     # the loop
-    with profiler.profile(
-        activities=[
-            profiler.ProfilerActivity.CPU,
-            profiler.ProfilerActivity.CUDA,
-        ],
-        schedule=profiler.schedule(wait=1, warmup=1, active=3),
-        on_trace_ready=profiler.tensorboard_trace_handler(
-            f"./logs/profile/{args.label}"
-        ),
+    with profile(
+        activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+        schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+        on_trace_ready=tensorboard_trace_handler(f"./logs/profile/{args.label}"),
+        record_shapes=True,
+        profile_memory=True,
     ) as prof:
         for epoch in range(args.n_epochs):
             # initialise timing stats
