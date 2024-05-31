@@ -507,7 +507,7 @@ def main(args):
 
     l_val_best = 1000000  # initialise the best validation loss
     # Initialize TensorBoard writer
-    writer = SummaryWriter(log_dir=f"./logs/{args.label}")
+    writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
 
     # the loop
     with profiler.profile(
@@ -516,7 +516,9 @@ def main(args):
             profiler.ProfilerActivity.CUDA,
         ],
         schedule=profiler.schedule(wait=1, warmup=1, active=3),
-        on_trace_ready=profiler.tensorboard_trace_handler(f"./logs/{args.label}"),
+        on_trace_ready=profiler.tensorboard_trace_handler(
+            f"./logs/profile/{args.label}"
+        ),
     ) as prof:
         for epoch in range(args.n_epochs):
             # initialise timing stats
