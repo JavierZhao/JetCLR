@@ -521,7 +521,7 @@ def main(args):
         on_trace_ready=tensorboard_trace_handler(writer.log_dir),
         record_shapes=True,
         profile_memory=True,
-        with_stack=True,
+        with_stack=False,
     ) as prof:
         for epoch in range(args.n_epochs):
             # initialise timing stats
