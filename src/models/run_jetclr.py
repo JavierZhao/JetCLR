@@ -21,6 +21,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
+import torch.profiler as profiler
+from torch.utils.tensorboard import SummaryWriter
+
 # load custom modules required for jetCLR training
 # from src.modules.jet_augs import (
 #     rotate_jets,
@@ -503,322 +506,345 @@ def main(args):
     average_similarities = np.zeros((args.n_epochs, num_classes))
 
     l_val_best = 1000000  # initialise the best validation loss
+    # Initialize TensorBoard writer
+    writer = SummaryWriter(log_dir=f"./logs/{args.label}")
+
     # the loop
-    for epoch in range(args.n_epochs):
-        # initialise timing stats
-        te0 = time.time()
+    with profiler.profile(
+        activities=[
+            profiler.ProfilerActivity.CPU,
+            profiler.ProfilerActivity.CUDA,
+        ],
+        schedule=profiler.schedule(wait=1, warmup=1, active=3),
+        on_trace_ready=profiler.tensorboard_trace_handler(f"./logs/{args.label}"),
+    ) as prof:
+        for epoch in range(args.n_epochs):
+            # initialise timing stats
+            te0 = time.time()
 
-        # initialise lists to store batch stats
-        loss_align_e = []
-        loss_uniform_e = []
-        losses_e = []
-        losses_e_val = []
+            # initialise lists to store batch stats
+            loss_align_e = []
+            loss_uniform_e = []
+            losses_e = []
+            losses_e_val = []
 
-        # initialise timing stats
-        td_aug = 0
-        td_forward = 0
-        td_loss = 0
-        td_backward = 0
+            # initialise timing stats
+            td_aug = 0
+            td_forward = 0
+            td_loss = 0
+            td_backward = 0
 
-        t_cos_sim_start = time.time()
-        # calculate the average cosine similarity for each class
-        # initialize the arrays to store the average cosine similarities
-        print("Calculating average cosine similarities", flush=True, file=logfile)
-        avg_similarities = np.zeros(num_classes)
-        counts = np.zeros(num_classes, dtype=int)
-        with torch.no_grad():
-            net.eval()
-            total = int(len(test_dataset) / args.batch_size)
+            t_cos_sim_start = time.time()
+            # calculate the average cosine similarity for each class
+            # initialize the arrays to store the average cosine similarities
+            print("Calculating average cosine similarities", flush=True, file=logfile)
+            avg_similarities = np.zeros(num_classes)
+            counts = np.zeros(num_classes, dtype=int)
+            with torch.no_grad():
+                net.eval()
+                total = int(len(test_dataset) / args.batch_size)
+                pbar_t = tqdm.tqdm(
+                    test_loader,
+                    total=total // 10,
+                    desc=f"Inference for Epoch {epoch}",
+                )
+
+                for i, (batch_data, batch_labels) in enumerate(pbar_t):
+                    if i == total // 10:
+                        break
+                    batch_data = batch_data.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 7, 128)
+                    batch_labels = batch_labels.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+                    x_i, x_j = augmentation(args, batch_data)
+                    batch_size = x_i.shape[0]
+                    x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_i = F.normalize(x_i, dim=1)
+                    z_j = F.normalize(x_j, dim=1)
+                    z = torch.cat([z_i, z_j], dim=0)
+                    similarity_matrix = F.cosine_similarity(
+                        z.unsqueeze(1), z.unsqueeze(0), dim=2
+                    )
+                    sim_ij = torch.diag(similarity_matrix, batch_size)
+
+                    # Convert batch_labels from one-hot to indices for easier processing
+                    labels_indices = torch.argmax(batch_labels, dim=1)
+
+                    # Iterate through each label index and append the corresponding sim_ij value
+                    for label_idx in range(labels_indices.size(0)):
+                        label = labels_indices[label_idx].item()
+                        sim_value = sim_ij[label_idx].item()
+
+                        avg_similarities[label] += sim_value
+                        counts[label] += 1
+
+                average_similarities[epoch, :] = np.divide(
+                    avg_similarities, counts, where=counts != 0
+                )
+            # save average similarities
+            if epoch != 0:
+                np.save(expt_dir + "average_similarities.npy", average_similarities)
+
+            # plot the average cosine similarities
+            plot_avg_cosine_similarities(args, average_similarities)
+            t_cos_sim_end = time.time()
+            td_cos_sim = t_cos_sim_end - t_cos_sim_start
+
+            # the inner loop goes through the dataset batch by batch
+            # augmentations of the jets are done on the fly
+
+            net.train()
             pbar_t = tqdm.tqdm(
-                test_loader,
-                total=total // 10,
-                desc=f"Inference for Epoch {epoch}",
+                train_loader,
+                total=int(len(train_dataset) / args.batch_size),
+                desc="Training",
             )
-
-            for i, (batch_data, batch_labels) in enumerate(pbar_t):
-                if i == total // 10:
-                    break
-                batch_data = batch_data.to(
-                    args.device
-                )  # Assuming shape (batch_size, 7, 128)
-                batch_labels = batch_labels.to(
-                    args.device
-                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                x_i, x_j = augmentation(args, batch_data)
-                batch_size = x_i.shape[0]
-                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_i = F.normalize(x_i, dim=1)
-                z_j = F.normalize(x_j, dim=1)
-                z = torch.cat([z_i, z_j], dim=0)
-                similarity_matrix = F.cosine_similarity(
-                    z.unsqueeze(1), z.unsqueeze(0), dim=2
-                )
-                sim_ij = torch.diag(similarity_matrix, batch_size)
-
-                # Convert batch_labels from one-hot to indices for easier processing
-                labels_indices = torch.argmax(batch_labels, dim=1)
-
-                # Iterate through each label index and append the corresponding sim_ij value
-                for label_idx in range(labels_indices.size(0)):
-                    label = labels_indices[label_idx].item()
-                    sim_value = sim_ij[label_idx].item()
-
-                    avg_similarities[label] += sim_value
-                    counts[label] += 1
-
-            average_similarities[epoch, :] = np.divide(
-                avg_similarities, counts, where=counts != 0
-            )
-        # save average similarities
-        if epoch != 0:
-            np.save(expt_dir + "average_similarities.npy", average_similarities)
-
-        # plot the average cosine similarities
-        plot_avg_cosine_similarities(args, average_similarities)
-        t_cos_sim_end = time.time()
-        td_cos_sim = t_cos_sim_end - t_cos_sim_start
-
-        # the inner loop goes through the dataset batch by batch
-        # augmentations of the jets are done on the fly
-
-        net.train()
-        pbar_t = tqdm.tqdm(
-            train_loader,
-            total=int(len(train_dataset) / args.batch_size),
-            desc="Training",
-        )
-        for _, batch in enumerate(pbar_t):
-            time1 = time.time()
-            batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-            net.optimizer.zero_grad()
-            x_i, x_j = augmentation(args, batch)
-            time2 = time.time()
-            z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-            z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-            time3 = time.time()
-            # calculate the alignment and uniformity loss for each batch
-            loss_align = align_loss(z_i, z_j)
-            loss_uniform_zi = uniform_loss(z_i)
-            loss_uniform_zj = uniform_loss(z_j)
-            loss_align_e.append(loss_align.detach().cpu().numpy())
-            loss_uniform_e.append(
-                (
-                    loss_uniform_zi.detach().cpu().numpy()
-                    + loss_uniform_zj.detach().cpu().numpy()
-                )
-                / 2
-            )
-            time4 = time.time()
-
-            # compute the loss, back-propagate, and update scheduler if required
-            if args.new_loss:
-                loss = contrastive_loss_new(z_i, z_j, args.temperature).to(device)
-            else:
-                loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
-            loss.backward()
-            net.optimizer.step()
-            if args.opt == "sgdca":
-                scheduler.step(epoch + i / iters)
-            losses_e.append(loss.detach().cpu().numpy())
-            time5 = time.time()
-            pbar_t.set_description(f"Training loss: {loss:.4f}")
-
-            # update timiing stats
-            td_aug += time2 - time1
-            td_forward += time3 - time2
-            td_loss += time4 - time3
-            td_backward += time5 - time4
-
-        loss_e = np.mean(np.array(losses_e))
-        losses.append(loss_e)
-
-        if args.opt == "sgdslr":
-            scheduler.step()
-
-        # calculate validation loss at the end of the epoch
-
-        t_val_start = time.time()
-        with torch.no_grad():
-            net.eval()
-            pbar_v = tqdm.tqdm(
-                val_loader,
-                total=int(len(val_dataset) / args.batch_size),
-                desc="Validation",
-            )
-            for _, batch in enumerate(pbar_v):
+            for _, batch in enumerate(pbar_t):
+                time1 = time.time()
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
                 net.optimizer.zero_grad()
-                y_i, y_j = augmentation(args, batch)
-                z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
-                losses_e_val.append(val_loss.detach().cpu().numpy())
-                pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
-            loss_e_val = np.mean(np.array(losses_e_val))
-            losses_val.append(loss_e_val)
-        t_val_end = time.time()
-        td_val = t_val_end - t_val_start
+                x_i, x_j = augmentation(args, batch)
+                time2 = time.time()
+                z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                time3 = time.time()
+                # calculate the alignment and uniformity loss for each batch
+                loss_align = align_loss(z_i, z_j)
+                loss_uniform_zi = uniform_loss(z_i)
+                loss_uniform_zj = uniform_loss(z_j)
+                loss_align_e.append(loss_align.detach().cpu().numpy())
+                loss_uniform_e.append(
+                    (
+                        loss_uniform_zi.detach().cpu().numpy()
+                        + loss_uniform_zj.detach().cpu().numpy()
+                    )
+                    / 2
+                )
+                time4 = time.time()
 
-        print(
-            "epoch: "
-            + str(epoch)
-            + ", loss: "
-            + str(round(losses[-1], 5))
-            + ", val loss: "
-            + str(round(losses_val[-1], 5)),
-            flush=True,
-            file=logfile,
-        )
+                # compute the loss, back-propagate, and update scheduler if required
+                if args.new_loss:
+                    loss = contrastive_loss_new(z_i, z_j, args.temperature).to(device)
+                else:
+                    loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+                loss.backward()
+                net.optimizer.step()
+                if args.opt == "sgdca":
+                    scheduler.step(epoch + i / iters)
+                losses_e.append(loss.detach().cpu().numpy())
+                time5 = time.time()
+                pbar_t.set_description(f"Training loss: {loss:.4f}")
 
-        # save the latest model
-        torch.save(net.state_dict(), expt_dir + "model_last.pt")
+                # update timiing stats
+                td_aug += time2 - time1
+                td_forward += time3 - time2
+                td_loss += time4 - time3
+                td_backward += time5 - time4
 
-        # save the model if the validation loss is the lowest
-        if losses_val[-1] < l_val_best:
-            l_val_best = losses_val[-1]
+                # Log training loss to TensorBoard
+                writer.add_scalar(
+                    "Loss/train", loss.item(), epoch * len(train_loader) + _
+                )
+
+                prof.step()
+
+            loss_e = np.mean(np.array(losses_e))
+            losses.append(loss_e)
+
+            if args.opt == "sgdslr":
+                scheduler.step()
+
+            # calculate validation loss at the end of the epoch
+
+            t_val_start = time.time()
+            with torch.no_grad():
+                net.eval()
+                pbar_v = tqdm.tqdm(
+                    val_loader,
+                    total=int(len(val_dataset) / args.batch_size),
+                    desc="Validation",
+                )
+                for _, batch in enumerate(pbar_v):
+                    batch = batch.to(args.device)  # shape (batch_size, 7, 128)
+                    net.optimizer.zero_grad()
+                    y_i, y_j = augmentation(args, batch)
+                    z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+                    losses_e_val.append(val_loss.detach().cpu().numpy())
+                    pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
+
+                    writer.add_scalar(
+                        "Loss/val", val_loss.item(), epoch * len(val_loader) + _
+                    )
+                loss_e_val = np.mean(np.array(losses_e_val))
+                losses_val.append(loss_e_val)
+            t_val_end = time.time()
+            td_val = t_val_end - t_val_start
+
             print(
-                "saving out new best jetCLR model, validation loss: " + str(l_val_best),
+                "epoch: "
+                + str(epoch)
+                + ", loss: "
+                + str(round(losses[-1], 5))
+                + ", val loss: "
+                + str(round(losses_val[-1], 5)),
                 flush=True,
                 file=logfile,
             )
-            torch.save(net.state_dict(), expt_dir + "model_best.pt")
 
-        # summarise alignment and uniformity stats
-        loss_align_epochs.append(np.mean(np.array(loss_align_e)))
-        loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
-        print(
-            "alignment: "
-            + str(loss_align_epochs[-1])
-            + ", uniformity: "
-            + str(loss_uniform_epochs[-1]),
-            flush=True,
-            file=logfile,
-        )
-        te1 = time.time()
+            # save the latest model
+            torch.save(net.state_dict(), expt_dir + "model_last.pt")
 
-        if args.opt == "sgdca" or args.opt == "sgdslr":
-            print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
-        print(
-            f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim, 1)}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
-            flush=True,
-            file=logfile,
-        )
+            # save the model if the validation loss is the lowest
+            if losses_val[-1] < l_val_best:
+                l_val_best = losses_val[-1]
+                print(
+                    "saving out new best jetCLR model, validation loss: "
+                    + str(l_val_best),
+                    flush=True,
+                    file=logfile,
+                )
+                torch.save(net.state_dict(), expt_dir + "model_best.pt")
 
-        # check memory stats on the gpu
-        if epoch % 10 == 0:
-            t = torch.cuda.get_device_properties(0).total_memory
-            r = torch.cuda.memory_reserved(0)
-            a = torch.cuda.memory_allocated(0)
-            f = r - a  # free inside reserved
+            # summarise alignment and uniformity stats
+            loss_align_epochs.append(np.mean(np.array(loss_align_e)))
+            loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
             print(
-                f"CUDA memory: total {t / np.power(1024,3)}G, reserved {r/ np.power(1024,3)}G, allocated {a/ np.power(1024,3)}G, free {f/ np.power(1024,3)}G",
+                "alignment: "
+                + str(loss_align_epochs[-1])
+                + ", uniformity: "
+                + str(loss_uniform_epochs[-1]),
+                flush=True,
+                file=logfile,
+            )
+            te1 = time.time()
+
+            if args.opt == "sgdca" or args.opt == "sgdslr":
+                print("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
+            print(
+                f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim, 1)}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
                 flush=True,
                 file=logfile,
             )
 
-        # check number of threads being used
-        if epoch % 10 == 0:
-            print(
-                "num threads in use: " + str(torch.get_num_threads()),
-                flush=True,
-                file=logfile,
-            )
+            # check memory stats on the gpu
+            if epoch % 10 == 0:
+                t = torch.cuda.get_device_properties(0).total_memory
+                r = torch.cuda.memory_reserved(0)
+                a = torch.cuda.memory_allocated(0)
+                f = r - a  # free inside reserved
+                print(
+                    f"CUDA memory: total {t / np.power(1024,3)}G, reserved {r/ np.power(1024,3)}G, allocated {a/ np.power(1024,3)}G, free {f/ np.power(1024,3)}G",
+                    flush=True,
+                    file=logfile,
+                )
 
-        # run a short LCT
-        # if epoch % 10 == 0:
-        #     print("--- LCT ----", flush=True, file=logfile)
-        #     # get the validation reps
-        #     with torch.no_grad():
-        #         net.eval()
-        #         vl_reps_1 = (
-        #             net.forward_batchwise(
-        #                 test_dat_1.transpose(1, 2),
-        #                 args.batch_size,
-        #                 use_mask=args.mask,
-        #                 use_continuous_mask=args.cmask,
-        #             )
-        #             .detach()
-        #             .cpu()
-        #             .numpy()
-        #         )
-        #         vl_reps_2 = (
-        #             net.forward_batchwise(
-        #                 test_dat_2.transpose(1, 2),
-        #                 args.batch_size,
-        #                 use_mask=args.mask,
-        #                 use_continuous_mask=args.cmask,
-        #             )
-        #             .detach()
-        #             .cpu()
-        #             .numpy()
-        #         )
-        #         net.train()
-        #     # running the LCT on each rep layer
-        #     auc_list = []
-        #     imtafe_list = []
-        #     # loop through every representation layer
-        #     for i in range(vl_reps_1.shape[1]):
-        #         # just want to use the 0th rep (i.e. directly from the transformer) for now
-        #         if i == 1:
-        #             vl0_test = time.time()
-        #             (
-        #                 out_dat_vl,
-        #                 out_lbs_vl,
-        #                 losses_vl,
-        #                 _,
-        #             ) = binary_linear_classifier_test(
-        #                 linear_input_size,
-        #                 linear_batch_size,
-        #                 linear_n_epochs,
-        #                 "adam",
-        #                 linear_learning_rate,
-        #                 vl_reps_1[:, i, :],
-        #                 test_lab_1,
-        #                 vl_reps_2[:, i, :],
-        #                 test_lab_2,
-        #                 logfile=logfile,
-        #             )
-        #             auc, imtafe = get_perf_stats(out_lbs_vl, out_dat_vl)
-        #             auc_list.append(auc)
-        #             imtafe_list.append(imtafe)
-        #             vl1_test = time.time()
-        #             print(
-        #                 "LCT layer "
-        #                 + str(i)
-        #                 + "- time taken: "
-        #                 + str(np.round(vl1_test - vl0_test, 2)),
-        #                 flush=True,
-        #                 file=logfile,
-        #             )
-        #             print(
-        #                 "auc: "
-        #                 + str(np.round(auc, 4))
-        #                 + ", imtafe: "
-        #                 + str(round(imtafe, 1)),
-        #                 flush=True,
-        #                 file=logfile,
-        #             )
-        #             np.save(
-        #                 expt_dir
-        #                 + "lct_ep"
-        #                 + str(epoch)
-        #                 + "_r"
-        #                 + str(i)
-        #                 + "_losses.npy",
-        #                 losses_vl,
-        #             )
-        #     auc_epochs.append(auc_list)
-        #     imtafe_epochs.append(imtafe_list)
-        #     print("---- --- ----", flush=True, file=logfile)
+            # check number of threads being used
+            if epoch % 10 == 0:
+                print(
+                    "num threads in use: " + str(torch.get_num_threads()),
+                    flush=True,
+                    file=logfile,
+                )
 
-        # saving out training stats
-        np.save(expt_dir + "clr_losses.npy", losses)
-        np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
-        np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
-        np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
-        np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
-        np.save(expt_dir + "val_losses.npy", losses_val)
+            # run a short LCT
+            # if epoch % 10 == 0:
+            #     print("--- LCT ----", flush=True, file=logfile)
+            #     # get the validation reps
+            #     with torch.no_grad():
+            #         net.eval()
+            #         vl_reps_1 = (
+            #             net.forward_batchwise(
+            #                 test_dat_1.transpose(1, 2),
+            #                 args.batch_size,
+            #                 use_mask=args.mask,
+            #                 use_continuous_mask=args.cmask,
+            #             )
+            #             .detach()
+            #             .cpu()
+            #             .numpy()
+            #         )
+            #         vl_reps_2 = (
+            #             net.forward_batchwise(
+            #                 test_dat_2.transpose(1, 2),
+            #                 args.batch_size,
+            #                 use_mask=args.mask,
+            #                 use_continuous_mask=args.cmask,
+            #             )
+            #             .detach()
+            #             .cpu()
+            #             .numpy()
+            #         )
+            #         net.train()
+            #     # running the LCT on each rep layer
+            #     auc_list = []
+            #     imtafe_list = []
+            #     # loop through every representation layer
+            #     for i in range(vl_reps_1.shape[1]):
+            #         # just want to use the 0th rep (i.e. directly from the transformer) for now
+            #         if i == 1:
+            #             vl0_test = time.time()
+            #             (
+            #                 out_dat_vl,
+            #                 out_lbs_vl,
+            #                 losses_vl,
+            #                 _,
+            #             ) = binary_linear_classifier_test(
+            #                 linear_input_size,
+            #                 linear_batch_size,
+            #                 linear_n_epochs,
+            #                 "adam",
+            #                 linear_learning_rate,
+            #                 vl_reps_1[:, i, :],
+            #                 test_lab_1,
+            #                 vl_reps_2[:, i, :],
+            #                 test_lab_2,
+            #                 logfile=logfile,
+            #             )
+            #             auc, imtafe = get_perf_stats(out_lbs_vl, out_dat_vl)
+            #             auc_list.append(auc)
+            #             imtafe_list.append(imtafe)
+            #             vl1_test = time.time()
+            #             print(
+            #                 "LCT layer "
+            #                 + str(i)
+            #                 + "- time taken: "
+            #                 + str(np.round(vl1_test - vl0_test, 2)),
+            #                 flush=True,
+            #                 file=logfile,
+            #             )
+            #             print(
+            #                 "auc: "
+            #                 + str(np.round(auc, 4))
+            #                 + ", imtafe: "
+            #                 + str(round(imtafe, 1)),
+            #                 flush=True,
+            #                 file=logfile,
+            #             )
+            #             np.save(
+            #                 expt_dir
+            #                 + "lct_ep"
+            #                 + str(epoch)
+            #                 + "_r"
+            #                 + str(i)
+            #                 + "_losses.npy",
+            #                 losses_vl,
+            #             )
+            #     auc_epochs.append(auc_list)
+            #     imtafe_epochs.append(imtafe_list)
+            #     print("---- --- ----", flush=True, file=logfile)
+
+            # saving out training stats
+            np.save(expt_dir + "clr_losses.npy", losses)
+            np.save(expt_dir + "auc_epochs.npy", np.array(auc_epochs))
+            np.save(expt_dir + "imtafe_epochs.npy", np.array(imtafe_epochs))
+            np.save(expt_dir + "align_loss_train.npy", loss_align_epochs)
+            np.save(expt_dir + "uniform_loss_train.npy", loss_uniform_epochs)
+            np.save(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
 
