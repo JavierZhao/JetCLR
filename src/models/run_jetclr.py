@@ -862,8 +862,7 @@ def main(args):
     t2 = time.time()
     if args.profile:
         print(
-            prof.key_averages().table(sort_by="cuda_time_total"),
-            row_limit=20,
+            prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
             flush=True,
             file=logfile,
         )
