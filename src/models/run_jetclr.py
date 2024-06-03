@@ -655,7 +655,7 @@ def main(args):
 
                 # Log training loss to TensorBoard
                 writer.add_scalar(
-                    "Loss/train", loss.item(), epoch * len(train_loader) + _
+                    "Loss/train", loss.item(), epoch * len(train_loader) + batch_num
                 )
                 # if batch_num % 10 == 0:
                 #     prof.step()
