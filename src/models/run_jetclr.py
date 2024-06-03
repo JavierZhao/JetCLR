@@ -535,71 +535,66 @@ def main(args):
         t_cos_sim_start = time.time()
         # calculate the average cosine similarity for each class
         # initialize the arrays to store the average cosine similarities
-        print("Calculating average cosine similarities", flush=True, file=logfile)
-        avg_similarities = np.zeros(num_classes)
-        counts = np.zeros(num_classes, dtype=int)
-        with torch.no_grad():
-            net.eval()
-            total = int(len(test_dataset) / args.batch_size)
-            pbar_t = tqdm.tqdm(
-                test_loader,
-                total=total // 10,
-                desc=f"Inference for Epoch {epoch}",
-            )
-
-            for i, (batch_data, batch_labels) in enumerate(pbar_t):
-                if i == total // 10:
-                    break
-                batch_data = batch_data.to(
-                    args.device
-                )  # Assuming shape (batch_size, 7, 128)
-                batch_labels = batch_labels.to(
-                    args.device
-                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                x_i, x_j = augmentation(args, batch_data)
-                batch_size = x_i.shape[0]
-                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_i = F.normalize(x_i, dim=1)
-                z_j = F.normalize(x_j, dim=1)
-                z = torch.cat([z_i, z_j], dim=0)
-                similarity_matrix = F.cosine_similarity(
-                    z.unsqueeze(1), z.unsqueeze(0), dim=2
+        if not args.profile:
+            print("Calculating average cosine similarities", flush=True, file=logfile)
+            avg_similarities = np.zeros(num_classes)
+            counts = np.zeros(num_classes, dtype=int)
+            with torch.no_grad():
+                net.eval()
+                total = int(len(test_dataset) / args.batch_size)
+                pbar_t = tqdm.tqdm(
+                    test_loader,
+                    total=total // 10,
+                    desc=f"Inference for Epoch {epoch}",
                 )
-                sim_ij = torch.diag(similarity_matrix, batch_size)
 
-                # Convert batch_labels from one-hot to indices for easier processing
-                labels_indices = torch.argmax(batch_labels, dim=1)
+                for i, (batch_data, batch_labels) in enumerate(pbar_t):
+                    if i == total // 10:
+                        break
+                    batch_data = batch_data.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 7, 128)
+                    batch_labels = batch_labels.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+                    x_i, x_j = augmentation(args, batch_data)
+                    batch_size = x_i.shape[0]
+                    x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_i = F.normalize(x_i, dim=1)
+                    z_j = F.normalize(x_j, dim=1)
+                    z = torch.cat([z_i, z_j], dim=0)
+                    similarity_matrix = F.cosine_similarity(
+                        z.unsqueeze(1), z.unsqueeze(0), dim=2
+                    )
+                    sim_ij = torch.diag(similarity_matrix, batch_size)
 
-                # Iterate through each label index and append the corresponding sim_ij value
-                for label_idx in range(labels_indices.size(0)):
-                    label = labels_indices[label_idx].item()
-                    sim_value = sim_ij[label_idx].item()
+                    # Convert batch_labels from one-hot to indices for easier processing
+                    labels_indices = torch.argmax(batch_labels, dim=1)
 
-                    avg_similarities[label] += sim_value
-                    counts[label] += 1
+                    # Iterate through each label index and append the corresponding sim_ij value
+                    for label_idx in range(labels_indices.size(0)):
+                        label = labels_indices[label_idx].item()
+                        sim_value = sim_ij[label_idx].item()
 
-            average_similarities[epoch, :] = np.divide(
-                avg_similarities, counts, where=counts != 0
-            )
-        # save average similarities
-        if epoch != 0:
-            np.save(expt_dir + "average_similarities.npy", average_similarities)
+                        avg_similarities[label] += sim_value
+                        counts[label] += 1
 
-        # plot the average cosine similarities
-        plot_avg_cosine_similarities(args, average_similarities)
-        t_cos_sim_end = time.time()
-        td_cos_sim = t_cos_sim_end - t_cos_sim_start
+                average_similarities[epoch, :] = np.divide(
+                    avg_similarities, counts, where=counts != 0
+                )
+            # save average similarities
+            if epoch != 0:
+                np.save(expt_dir + "average_similarities.npy", average_similarities)
+
+            # plot the average cosine similarities
+            plot_avg_cosine_similarities(args, average_similarities)
+            t_cos_sim_end = time.time()
+            td_cos_sim = t_cos_sim_end - t_cos_sim_start
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
 
-        net.train()
-        pbar_t = tqdm.tqdm(
-            train_loader,
-            total=int(len(train_dataset) / args.batch_size),
-            desc="Training",
-        )
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
@@ -608,6 +603,13 @@ def main(args):
             profile_memory=True,
             with_stack=False,
         ) as prof:
+            net.train()
+            total_train = int(len(train_dataset) / args.batch_size)
+            pbar_t = tqdm.tqdm(
+                train_loader,
+                total=total_train,
+                desc="Training",
+            )
             for batch_num, batch in enumerate(pbar_t):
                 with record_function("model_training"):
                     time1 = time.time()
@@ -657,9 +659,11 @@ def main(args):
                 writer.add_scalar(
                     "Loss/train", loss.item(), epoch * len(train_loader) + batch_num
                 )
-                # if batch_num % 10 == 0:
-                #     prof.step()
                 prof.step()
+                if batch_num == 10 and args.profile:
+                    break
+        if args.profile:
+            break
 
         loss_e = np.mean(np.array(losses_e))
         losses.append(loss_e)
@@ -856,6 +860,13 @@ def main(args):
         np.save(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
+    if args.profile:
+        print(
+            prof.key_averages().table(sort_by="cuda_time_total"),
+            row_limit=20,
+            flush=True,
+            file=logfile,
+        )
 
     print(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
@@ -967,6 +978,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--profile",
+        type=int,
+        action="store",
+        dest="profile",
+        default=0,
+        help="do profiling (only run first few batches)",
+    )
     parser.add_argument(
         "--aug-device",
         type=str,
