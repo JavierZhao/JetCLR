@@ -623,9 +623,9 @@ def main(args):
                 with torch.autocast(
                     device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
-                    with torch.autocast(device_type="cuda", enabled=False):
-                        z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                        z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    # with torch.autocast(device_type="cuda", enabled=False):
+                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
                     if torch.isnan(z_i).any() or torch.isnan(z_j).any():
                         print("NaN detected in output")
                     time3 = time.time()

@@ -102,7 +102,11 @@ class Transformer(nn.Module):
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
         x = self.embedding(x)
+        if torch.isnan(x).any():
+            print("NaN detected after embedding")
         x = self.transformer(x, mask=mask)
+        if torch.isnan(x).any():
+            print("NaN detected after transformer")
         if use_mask:
             # set masked constituents to zero
             # otherwise the sum will change if the constituents with 0 pT change
@@ -114,6 +118,8 @@ class Transformer(nn.Module):
         # sum over sequence dim
         # (batch_size, model_dim)
         x = x.sum(0)
+        if torch.isnan(x).any():
+            print("NaN detected after sum")
         return self.head(x, mult_reps)
 
     def head(self, x, mult_reps):
@@ -126,31 +132,36 @@ class Transformer(nn.Module):
                 reps shape=(batchsize, number_of_reps, output_dim)  for mult_reps=True
         """
         relu = nn.ReLU()
-        if mult_reps == True:
-            if self.n_head_layers > 0:
-                reps = torch.empty(x.shape[0], self.n_head_layers + 1, self.output_dim)
-                # Transform x to output_dim size before assignment
-                x_transformed = (
-                    self.head_layers[0](relu(x)) if self.n_head_layers > 0 else x
-                )
-                reps[:, 0] = x_transformed
+        with torch.autocast(device_type="cuda", enabled=False):
+            if mult_reps == True:
+                if self.n_head_layers > 0:
+                    reps = torch.empty(x.shape[0], self.n_head_layers + 1, self.output_dim)
+                    # Transform x to output_dim size before assignment
+                    x_transformed = (
+                        self.head_layers[0](relu(x)) if self.n_head_layers > 0 else x
+                    )
+                    reps[:, 0] = x_transformed
+                    for i, layer in enumerate(self.head_layers):
+                        if self.head_norm:
+                            x = self.norm_layers[i](x)
+                        x = relu(x)
+                        x = layer(x)
+                        reps[:, i + 1] = x
+                    return reps
+                else:
+                    reps = x[:, None, :]
+                    return reps
+            else:
                 for i, layer in enumerate(self.head_layers):
                     if self.head_norm:
                         x = self.norm_layers[i](x)
                     x = relu(x)
+                    if torch.isnan(x).any():
+                        print("NaN detected after relu")
                     x = layer(x)
-                    reps[:, i + 1] = x
-                return reps
-            else:
-                reps = x[:, None, :]
-                return reps
-        else:
-            for i, layer in enumerate(self.head_layers):
-                if self.head_norm:
-                    x = self.norm_layers[i](x)
-                x = relu(x)
-                x = layer(x)
-            return x
+                    if torch.isnan(x).any():
+                        print("NaN detected after head layer")
+                return x
 
     def forward_batchwise(
         self, x, batch_size, use_mask=False, use_continuous_mask=False
