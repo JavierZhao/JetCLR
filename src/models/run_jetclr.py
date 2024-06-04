@@ -515,6 +515,8 @@ def main(args):
     writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
 
     # Automatic Mixed Precision
+    # turn args.use_amp into bool
+    args.use_amp = args.use_amp == 1
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     for epoch in range(args.n_epochs):
         # initialise timing stats
