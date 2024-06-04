@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+@torch.jit.script
 def contrastive_loss(x_i, x_j, temperature):
     xdevice = x_i.get_device()
     if xdevice == -1:
