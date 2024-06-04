@@ -612,11 +612,12 @@ def main(args):
                 total=total_train,
                 desc="Training",
             )
-            time1 = time.time()
-            batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-            x_i, x_j = augmentation(args, batch)
-            time2 = time.time()
+
             for batch_num, batch in enumerate(pbar_t):
+                time1 = time.time()
+                batch = batch.to(args.device)  # shape (batch_size, 7, 128)
+                x_i, x_j = augmentation(args, batch)
+                time2 = time.time()
                 with torch.autocast(
                     device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
