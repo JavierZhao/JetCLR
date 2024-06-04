@@ -618,11 +618,16 @@ def main(args):
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
                 x_i, x_j = augmentation(args, batch)
                 time2 = time.time()
+                if torch.isnan(x_i).any() or torch.isnan(x_j).any():
+                    print("NaN detected in augmentation")
                 with torch.autocast(
                     device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
-                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    with torch.autocast(device_type="cuda", enabled=False):
+                        z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                        z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    if torch.isnan(z_i).any() or torch.isnan(z_j).any():
+                        print("NaN detected in output")
                     time3 = time.time()
                     # calculate the alignment and uniformity loss for each batch
                     loss_align = align_loss(z_i, z_j)
@@ -639,15 +644,17 @@ def main(args):
                     time4 = time.time()
 
                     # compute the loss, back-propagate, and update scheduler if required
-                    with torch.autocast(device_type="cuda", enabled=False):
-                        if args.new_loss:
-                            loss = contrastive_loss_new(z_i, z_j, args.temperature).to(
-                                device
-                            )
-                        else:
-                            loss = contrastive_loss(z_i, z_j, args.temperature).to(
-                                device
-                            )
+                    if args.new_loss:
+                        loss = contrastive_loss_new(z_i, z_j, args.temperature).to(
+                            device
+                        )
+                    else:
+                        loss = contrastive_loss(z_i, z_j, args.temperature).to(
+                            device
+                        )
+                    if torch.isnan(loss).any():
+                        print("NaN detected in loss!")
+
                 scaler.scale(loss).backward()
                 scaler.step(net.optimizer)
                 scaler.update()
