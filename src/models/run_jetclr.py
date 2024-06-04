@@ -514,8 +514,8 @@ def main(args):
     # Initialize TensorBoard writer
     writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
 
-    # the loop
-
+    # Automatic Mixed Precision
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
     for epoch in range(args.n_epochs):
         # initialise timing stats
         te0 = time.time()
@@ -611,10 +611,11 @@ def main(args):
                 desc="Training",
             )
             for batch_num, batch in enumerate(pbar_t):
-                with record_function("model_training"):
+                with torch.autocast(
+                    device_type=args.device, dtype=torch.float16, enabled=args.use_amp
+                ):
                     time1 = time.time()
                     batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                    net.optimizer.zero_grad(set_to_none=args.set_to_none)
                     x_i, x_j = augmentation(args, batch)
                     time2 = time.time()
                     z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -641,19 +642,21 @@ def main(args):
                         )
                     else:
                         loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
-                    loss.backward()
-                    net.optimizer.step()
-                    if args.opt == "sgdca":
-                        scheduler.step(epoch + i / iters)
-                    losses_e.append(loss.detach().cpu().numpy())
-                    time5 = time.time()
-                    pbar_t.set_description(f"Training loss: {loss:.4f}")
+                scaler.scale(loss).backward()
+                scaler.step(net.optimizer)
+                scaler.update()
+                net.optimizer.zero_grad(set_to_none=args.set_to_none)
+                if args.opt == "sgdca":
+                    scheduler.step(epoch + i / iters)
+                losses_e.append(loss.detach().cpu().numpy())
+                time5 = time.time()
+                pbar_t.set_description(f"Training loss: {loss:.4f}")
 
-                    # update timiing stats
-                    td_aug += time2 - time1
-                    td_forward += time3 - time2
-                    td_loss += time4 - time3
-                    td_backward += time5 - time4
+                # update timiing stats
+                td_aug += time2 - time1
+                td_forward += time3 - time2
+                td_loss += time4 - time3
+                td_backward += time5 - time4
 
                 # Log training loss to TensorBoard
                 writer.add_scalar(
@@ -977,6 +980,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--use-amp",
+        type=int,
+        action="store",
+        dest="use_amp",
+        default=0,
+        help="use automatic mixed precision (https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html)",
+    )
     parser.add_argument(
         "--set-to-none",
         type=int,
