@@ -614,7 +614,7 @@ def main(args):
                 with record_function("model_training"):
                     time1 = time.time()
                     batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                    net.optimizer.zero_grad()
+                    net.optimizer.zero_grad(set_to_none=args.set_to_none)
                     x_i, x_j = augmentation(args, batch)
                     time2 = time.time()
                     z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -683,7 +683,7 @@ def main(args):
             )
             for _, batch in enumerate(pbar_v):
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                net.optimizer.zero_grad()
+                net.optimizer.zero_grad(set_to_none=args.set_to_none)
                 y_i, y_j = augmentation(args, batch)
                 z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
                 z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -977,6 +977,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--set-to-none",
+        type=int,
+        action="store",
+        dest="set_to_none",
+        default=0,
+        help="set gradients to None in optimizer (https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html)",
+    )
     parser.add_argument(
         "--profile",
         type=int,
