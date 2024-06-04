@@ -638,12 +638,15 @@ def main(args):
                     time4 = time.time()
 
                     # compute the loss, back-propagate, and update scheduler if required
-                    if args.new_loss:
-                        loss = contrastive_loss_new(z_i, z_j, args.temperature).to(
-                            device
-                        )
-                    else:
-                        loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+                    with torch.autocast(device_type="cuda", enabled=False):
+                        if args.new_loss:
+                            loss = contrastive_loss_new(z_i, z_j, args.temperature).to(
+                                device
+                            )
+                        else:
+                            loss = contrastive_loss(z_i, z_j, args.temperature).to(
+                                device
+                            )
                 scaler.scale(loss).backward()
                 scaler.step(net.optimizer)
                 scaler.update()
