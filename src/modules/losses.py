@@ -9,10 +9,13 @@ import torch.nn.functional as F
 
 
 @torch.jit.script
-def contrastive_loss(x_i, x_j, temperature):
-    xdevice = x_i.get_device()
-    if xdevice == -1:
-        xdevice = "cpu"
+def contrastive_loss(x_i, x_j, temperature: float) -> torch.Tensor:
+    if x_i.is_cuda:
+        xdevice = x_i.get_device()
+        device = torch.device(f"cuda:{xdevice}")
+    else:
+        device = torch.device("cpu")
+
     batch_size = x_i.shape[0]
     z_i = F.normalize(x_i, dim=1)
     z_j = F.normalize(x_j, dim=1)
@@ -22,8 +25,9 @@ def contrastive_loss(x_i, x_j, temperature):
     sim_ji = torch.diag(similarity_matrix, -batch_size)
     positives = torch.cat([sim_ij, sim_ji], dim=0)
     nominator = torch.exp(positives / temperature)
-    negatives_mask = (~torch.eye(2 * batch_size, 2 * batch_size, dtype=bool)).float()
-    negatives_mask = negatives_mask.to(xdevice)
+    negatives_mask = ~torch.eye(
+        2 * batch_size, 2 * batch_size, dtype=torch.bool, device=device
+    )
     denominator = negatives_mask * torch.exp(similarity_matrix / temperature)
     loss_partial = -torch.log(nominator / torch.sum(denominator, dim=1))
     loss = torch.sum(loss_partial) / (2 * batch_size)
