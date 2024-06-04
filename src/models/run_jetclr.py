@@ -612,7 +612,7 @@ def main(args):
             )
             for batch_num, batch in enumerate(pbar_t):
                 with torch.autocast(
-                    device_type=args.device, dtype=torch.float16, enabled=args.use_amp
+                    device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
                     time1 = time.time()
                     batch = batch.to(args.device)  # shape (batch_size, 7, 128)
