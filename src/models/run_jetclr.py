@@ -660,7 +660,7 @@ def main(args):
                     "Loss/train", loss.item(), epoch * len(train_loader) + batch_num
                 )
                 prof.step()
-                if batch_num == 10 and args.profile:
+                if batch_num == 100 and args.profile:
                     break
         if args.profile:
             break
