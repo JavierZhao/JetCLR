@@ -633,14 +633,11 @@ def main(args):
                     loss_align = align_loss(z_i, z_j)
                     loss_uniform_zi = uniform_loss(z_i)
                     loss_uniform_zj = uniform_loss(z_j)
-                    # loss_align_e.append(loss_align.detach().cpu().numpy())
-                    # loss_uniform_e.append(
-                    #     (
-                    #         loss_uniform_zi.detach().cpu().numpy()
-                    #         + loss_uniform_zj.detach().cpu().numpy()
-                    #     )
-                    #     / 2
-                    # )
+                    with torch.no_grad():
+                        loss_align_e.append(loss_align.detach())
+                        loss_uniform_e.append(
+                            (loss_uniform_zi.detach() + loss_uniform_zj.detach()) / 2
+                        )
                     time4 = time.time()
 
                     # compute the loss, back-propagate, and update scheduler if required
@@ -659,7 +656,7 @@ def main(args):
                 net.optimizer.zero_grad(set_to_none=args.set_to_none)
                 if args.opt == "sgdca":
                     scheduler.step(epoch + i / iters)
-                # losses_e.append(loss.detach().cpu().numpy())
+                losses_e.append(loss.detach())
                 time5 = time.time()
                 pbar_t.set_description(f"Training loss: {loss:.4f}")
 
@@ -676,11 +673,26 @@ def main(args):
                 prof.step()
                 if batch_num == 100 and args.profile:
                     break
+
+        losses_e_tensor = torch.stack(losses_e).cpu().numpy()
+        loss_e = np.mean(losses_e_tensor)
+        losses.append(loss_e)
+        # summarise alignment and uniformity stats
+        losses_align_array = torch.stack(loss_align_e).cpu().numpy()
+        losses_uniform_array = torch.stack(loss_uniform_e).cpu().numpy()
+        loss_align_epochs.append(np.mean(losses_align_array))
+        loss_uniform_epochs.append(np.mean(losses_uniform_array))
+        print(
+            "alignment: "
+            + str(loss_align_epochs[-1])
+            + ", uniformity: "
+            + str(loss_uniform_epochs[-1]),
+            flush=True,
+            file=logfile,
+        )
+
         if args.profile:
             break
-
-        loss_e = np.mean(np.array(losses_e))
-        losses.append(loss_e)
 
         if args.opt == "sgdslr":
             scheduler.step()
@@ -737,17 +749,6 @@ def main(args):
             )
             torch.save(net.state_dict(), expt_dir + "model_best.pt")
 
-        # summarise alignment and uniformity stats
-        loss_align_epochs.append(np.mean(np.array(loss_align_e)))
-        loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
-        print(
-            "alignment: "
-            + str(loss_align_epochs[-1])
-            + ", uniformity: "
-            + str(loss_uniform_epochs[-1]),
-            flush=True,
-            file=logfile,
-        )
         te1 = time.time()
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
