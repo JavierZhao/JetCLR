@@ -633,14 +633,14 @@ def main(args):
                     loss_align = align_loss(z_i, z_j)
                     loss_uniform_zi = uniform_loss(z_i)
                     loss_uniform_zj = uniform_loss(z_j)
-                    loss_align_e.append(loss_align.detach().cpu().numpy())
-                    loss_uniform_e.append(
-                        (
-                            loss_uniform_zi.detach().cpu().numpy()
-                            + loss_uniform_zj.detach().cpu().numpy()
-                        )
-                        / 2
-                    )
+                    # loss_align_e.append(loss_align.detach().cpu().numpy())
+                    # loss_uniform_e.append(
+                    #     (
+                    #         loss_uniform_zi.detach().cpu().numpy()
+                    #         + loss_uniform_zj.detach().cpu().numpy()
+                    #     )
+                    #     / 2
+                    # )
                     time4 = time.time()
 
                     # compute the loss, back-propagate, and update scheduler if required
@@ -649,9 +649,7 @@ def main(args):
                             device
                         )
                     else:
-                        loss = contrastive_loss(z_i, z_j, args.temperature).to(
-                            device
-                        )
+                        loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
                     if torch.isnan(loss).any():
                         print("NaN detected in loss!")
 
@@ -661,7 +659,7 @@ def main(args):
                 net.optimizer.zero_grad(set_to_none=args.set_to_none)
                 if args.opt == "sgdca":
                     scheduler.step(epoch + i / iters)
-                losses_e.append(loss.detach().cpu().numpy())
+                # losses_e.append(loss.detach().cpu().numpy())
                 time5 = time.time()
                 pbar_t.set_description(f"Training loss: {loss:.4f}")
 
@@ -876,12 +874,11 @@ def main(args):
         np.save(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
-    if args.profile:
-        print(
-            prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
-            flush=True,
-            file=logfile,
-        )
+    print(
+        prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
+        flush=True,
+        file=logfile,
+    )
 
     print(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
