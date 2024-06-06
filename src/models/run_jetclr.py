@@ -599,7 +599,7 @@ def main(args):
 
         with profile(
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+            schedule=torch.profiler.schedule(wait=3, warmup=1, active=5, repeat=1),
             on_trace_ready=tensorboard_trace_handler(writer.log_dir),
             record_shapes=True,
             profile_memory=True,
