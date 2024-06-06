@@ -101,7 +101,8 @@ class Transformer(nn.Module):
             mask = None
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
-        x = self.embedding(x)
+        with torch.autocast(device_type="cuda", enabled=False):
+            x = self.embedding(x)
         if torch.isnan(x).any():
             print("NaN detected after embedding")
         x = self.transformer(x, mask=mask)
@@ -135,7 +136,9 @@ class Transformer(nn.Module):
         with torch.autocast(device_type="cuda", enabled=False):
             if mult_reps == True:
                 if self.n_head_layers > 0:
-                    reps = torch.empty(x.shape[0], self.n_head_layers + 1, self.output_dim)
+                    reps = torch.empty(
+                        x.shape[0], self.n_head_layers + 1, self.output_dim
+                    )
                     # Transform x to output_dim size before assignment
                     x_transformed = (
                         self.head_layers[0](relu(x)) if self.n_head_layers > 0 else x
