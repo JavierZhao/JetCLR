@@ -659,6 +659,13 @@ def main(args):
                 losses_e.append(loss.detach())
                 time5 = time.time()
                 pbar_t.set_description(f"Training loss: {loss:.4f}")
+                #  check for NaNs and Infs in the gradients
+                for name, param in net.named_parameters():
+                    if param.grad is not None:
+                        if torch.any(torch.isnan(param.grad)):
+                            print(f"NaN gradients in {name}")
+                        if torch.any(torch.isinf(param.grad)):
+                            print(f"Inf gradients in {name}")
 
                 # update timiing stats
                 td_aug += time2 - time1
