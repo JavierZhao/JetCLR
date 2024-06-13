@@ -651,6 +651,10 @@ def main(args):
                         print("NaN detected in loss!")
 
                 scaler.scale(loss).backward()
+                # do gradient clipping
+                if args.max_grad_norm > 0:
+                    scaler.unscale_(net.optimizer)
+                    torch.nn.utils.clip_grad_norm_(net.parameters(), args.max_grad_norm)
                 scaler.step(net.optimizer)
                 scaler.update()
                 net.optimizer.zero_grad(set_to_none=args.set_to_none)
@@ -998,6 +1002,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        action="store",
+        dest="max_grad_norm",
+        default=0,
+        help="max_norm in torch.nn.utils.clip_grad_norm_ (https://pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_norm_.html)",
+    )
     parser.add_argument(
         "--use-amp",
         type=int,
