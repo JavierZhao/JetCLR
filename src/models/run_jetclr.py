@@ -269,6 +269,26 @@ def plot_avg_cosine_similarities(args, avg_similarities):
     plt.close()
 
 
+activations = {}
+first_nan_inf_detected = False  # Flag to track if NaN or inf has been recorded
+
+
+def save_activation(name):
+    def hook(model, input, output):
+        if type(output) is tuple:
+            output = output[0]
+        global first_nan_inf_detected
+        if not first_nan_inf_detected:  # Check if NaN or inf has already been detected
+            activations[name] = output.detach()
+            if torch.isnan(output).any() or torch.isinf(output).any():
+                first_nan_inf_detected = (
+                    True  # Set the flag to prevent further recordings
+                )
+                print(f"Hook NaN or inf detected in {name}")
+
+    return hook
+
+
 def main(args):
     t0 = time.time()
 
@@ -447,6 +467,12 @@ def main(args):
     # send network to device
     net.to(device)
     print(net, flush=True, file=logfile)
+
+    if args.use_hook:
+        print("Registering forward hooks", flush=True, file=logfile)
+        for name, module in net.named_modules():
+            # if isinstance(module, (nn.Linear, nn.LayerNorm, nn.TransformerEncoder)):
+            module.register_forward_hook(save_activation(name))
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
@@ -749,6 +775,8 @@ def main(args):
 
         # save the latest model
         torch.save(net.state_dict(), expt_dir + "model_last.pt")
+        if args.use_hook:
+            torch.save(activations, expt_dir + "activations.pt")
 
         # save the model if the validation loss is the lowest
         if losses_val[-1] < l_val_best:
@@ -1002,6 +1030,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--use-hook",
+        type=int,
+        action="store",
+        dest="use_hook",
+        default=0,
+        help="use hooks to identify nan or inf (https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6)",
+    )
     parser.add_argument(
         "--max-grad-norm",
         type=float,
