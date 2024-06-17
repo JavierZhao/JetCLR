@@ -24,12 +24,13 @@ def contrastive_loss(x_i, x_j, temperature: float) -> torch.Tensor:
     sim_ij = torch.diag(similarity_matrix, batch_size)
     sim_ji = torch.diag(similarity_matrix, -batch_size)
     positives = torch.cat([sim_ij, sim_ji], dim=0)
-    nominator = torch.exp(positives / temperature).type(torch.float32)
+    nominator = torch.exp(positives / temperature)
+    nominator = nominator.to(dtype=torch.float32)
     negatives_mask = ~torch.eye(
         2 * batch_size, 2 * batch_size, dtype=torch.bool, device=device
     )
     denominator = negatives_mask * torch.exp(similarity_matrix / temperature)
-    denominator = denominator.type(torch.float32)
+    denominator = denominator.to(dtype=torch.float32)
     loss_partial = -torch.log(nominator / torch.sum(denominator, dim=1))
     loss = torch.sum(loss_partial) / (2 * batch_size)
     return loss
