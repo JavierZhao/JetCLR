@@ -299,7 +299,8 @@ def main(args):
     args.save_plot_path = f"/ssl-jet-vol-v3/JetCLR/plots/cosine_similarity/{args.label}"
     args.n_heads = 4
     args.opt = "adam"
-    args.learning_rate = 0.00005 * args.batch_size / 128
+    # args.learning_rate = 0.00005 * args.batch_size / 128
+    args.learning_rate = args.base_lr * args.batch_size / 128
 
     # initialise logfile
     logfile = open(args.logfile, "a")
@@ -1035,6 +1036,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--base-lr",
+        type=float,
+        action="store",
+        dest="base_lr",
+        default=0.00005,
+        help="base learning rate, to be multiplied by batch size / 128",
+    )
     parser.add_argument(
         "--eps",
         type=float,
