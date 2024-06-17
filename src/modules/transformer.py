@@ -101,11 +101,11 @@ class Transformer(nn.Module):
             mask = None
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
-        with torch.autocast(device_type="cuda", enabled=False):
-            x = self.embedding(x)
+        x = self.embedding(x)
         if torch.isnan(x).any():
             print("NaN detected after embedding")
-        x = self.transformer(x, mask=mask)
+        with torch.autocast(device_type="cuda", enabled=False):
+            x = self.transformer(x, mask=mask)
         if torch.isnan(x).any():
             print("NaN detected after transformer")
         if use_mask:
