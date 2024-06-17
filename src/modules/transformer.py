@@ -102,12 +102,8 @@ class Transformer(nn.Module):
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
         x = self.embedding(x)
-        if torch.isnan(x).any():
-            print("NaN detected after embedding")
         with torch.autocast(device_type="cuda", enabled=False):
             x = self.transformer(x, mask=mask)
-        if torch.isnan(x).any():
-            print("NaN detected after transformer")
         if use_mask:
             # set masked constituents to zero
             # otherwise the sum will change if the constituents with 0 pT change
@@ -119,8 +115,6 @@ class Transformer(nn.Module):
         # sum over sequence dim
         # (batch_size, model_dim)
         x = x.sum(0)
-        if torch.isnan(x).any():
-            print("NaN detected after sum")
         return self.head(x, mult_reps)
 
     def head(self, x, mult_reps):
@@ -159,11 +153,7 @@ class Transformer(nn.Module):
                     if self.head_norm:
                         x = self.norm_layers[i](x)
                     x = relu(x)
-                    if torch.isnan(x).any():
-                        print("NaN detected after relu")
                     x = layer(x)
-                    if torch.isnan(x).any():
-                        print("NaN detected after head layer")
                 return x
 
     def forward_batchwise(
