@@ -689,6 +689,11 @@ def main(args):
                     )
                 scaler.step(net.optimizer)
                 scaler.update()
+                writer.add_scalar(
+                    "Loss/scaler_scale",
+                    scaler._scale,
+                    epoch * len(train_loader) + batch_num,
+                )
                 net.optimizer.zero_grad(set_to_none=args.set_to_none)
                 if args.opt == "sgdca":
                     scheduler.step(epoch + i / iters)
@@ -1041,7 +1046,7 @@ if __name__ == "__main__":
         type=float,
         action="store",
         dest="base_lr",
-        default=0.00005,
+        default=5e-5,
         help="base learning rate, to be multiplied by batch size / 128",
     )
     parser.add_argument(
