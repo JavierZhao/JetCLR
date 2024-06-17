@@ -304,6 +304,12 @@ def main(args):
 
     # initialise logfile
     logfile = open(args.logfile, "a")
+    if args.continue_training:
+        print("-----------------------------------", file=logfile, flush=True)
+        print("-----------------------------------", file=logfile, flush=True)
+        print("continuing training", file=logfile, flush=True)
+        print("-----------------------------------", file=logfile, flush=True)
+        print("-----------------------------------", file=logfile, flush=True)
     print("logfile initialised", file=logfile, flush=True)
     if args.aug_device == "cpu":
         augmentation = augmentation_cpu
@@ -333,13 +339,19 @@ def main(args):
     expt_dir = base_dir + "JetClass" + expt_tag + "/"
 
     # check if experiment already exists and is not empty
-    if os.path.isdir(expt_dir) and os.listdir(expt_dir):
-        sys.exit(
-            "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
-        )
+    if not args.continue_training:
+        if os.path.isdir(expt_dir) and os.listdir(expt_dir):
+            sys.exit(
+                "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
+            )
+        else:
+            # This will create the directory if it does not exist or if it is empty
+            os.makedirs(expt_dir, exist_ok=True)
     else:
-        # This will create the directory if it does not exist or if it is empty
-        os.makedirs(expt_dir, exist_ok=True)
+        if not os.path.isdir(expt_dir) or not os.listdir(expt_dir):
+            sys.exit(
+                "ERROR: experiment does not exist or is empty, cannot continue training"
+            )
     print("experiment: " + str(args.label), file=logfile, flush=True)
 
     print("loading data")
@@ -468,6 +480,11 @@ def main(args):
         log=True,
         eps=args.eps,
     )
+
+    if args.continue_training:
+        print("Loading model from checkpoint", flush=True, file=logfile)
+        load_path = expt_dir + "model_last.pt"
+        net.load_state_dict(torch.load(load_path))
 
     # send network to device
     net.to(device)
@@ -1041,6 +1058,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--continue-training",
+        type=int,
+        action="store",
+        dest="continue_training",
+        default=0,
+        help="continue training from a saved model",
+    )
     parser.add_argument(
         "--base-lr",
         type=float,
