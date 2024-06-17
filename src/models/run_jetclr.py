@@ -273,7 +273,7 @@ activations = {}
 first_nan_inf_detected = False  # Flag to track if NaN or inf has been recorded
 
 
-def save_activation(name):
+def save_activation(args, name):
     def hook(model, input, output):
         if type(output) is tuple:
             output = output[0]
@@ -285,6 +285,9 @@ def save_activation(name):
                     True  # Set the flag to prevent further recordings
                 )
                 print(f"Hook NaN or inf detected in {name}")
+                print(
+                    f"Hook NaN or inf detected in {name}", file=args.logfile, flush=True
+                )
 
     return hook
 
@@ -472,7 +475,7 @@ def main(args):
         print("Registering forward hooks", flush=True, file=logfile)
         for name, module in net.named_modules():
             # if isinstance(module, (nn.Linear, nn.LayerNorm, nn.TransformerEncoder)):
-            module.register_forward_hook(save_activation(name))
+            module.register_forward_hook(save_activation(args, name))
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
