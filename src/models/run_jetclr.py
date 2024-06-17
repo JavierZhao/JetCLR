@@ -465,6 +465,7 @@ def main(args):
         dropout=0.1,
         opt=args.opt,
         log=True,
+        eps=args.eps,
     )
 
     # send network to device
@@ -1034,6 +1035,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--eps",
+        type=float,
+        action="store",
+        dest="eps",
+        default=1e-8,
+        help="epsilon value for Adam optimizer (https://pytorch.org/docs/stable/generated/torch.optim.Adam.html)",
+    )
     parser.add_argument(
         "--use-hook",
         type=int,

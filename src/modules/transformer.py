@@ -27,6 +27,7 @@ class Transformer(nn.Module):
         dropout=0.1,
         opt="adam",
         log=False,
+        eps=1e-8,
     ):
         super().__init__()
         # define hyperparameters
@@ -41,6 +42,7 @@ class Transformer(nn.Module):
         self.head_norm = head_norm
         self.dropout = dropout
         self.log = log
+        self.eps = eps  # epsilon for Adam
         # define subnetworks
         self.embedding = nn.Linear(input_dim, model_dim)
         self.transformer = nn.TransformerEncoder(
@@ -62,7 +64,9 @@ class Transformer(nn.Module):
                 self.head_layers.append(nn.Linear(output_dim, output_dim))
         # option to use adam or sgd
         if opt == "adam":
-            self.optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+            self.optimizer = torch.optim.Adam(
+                self.parameters(), lr=self.learning_rate, eps=self.eps
+            )
         if opt == "sgdca" or opt == "sgdslr" or opt == "sgd":
             self.optimizer = torch.optim.SGD(
                 self.parameters(), lr=self.learning_rate, momentum=0.9
@@ -102,9 +106,9 @@ class Transformer(nn.Module):
         x = torch.transpose(x, 0, 1)
         # (n_constit, batch_size, model_dim)
         x = self.embedding(x)
-        x = x.to(dtype=torch.float32)
-        with torch.autocast(device_type="cuda", enabled=False):
-            x = self.transformer(x, mask=mask)
+        # x = x.to(dtype=torch.float32)
+        # with torch.autocast(device_type="cuda", enabled=False):
+        x = self.transformer(x, mask=mask)
         if use_mask:
             # set masked constituents to zero
             # otherwise the sum will change if the constituents with 0 pT change
