@@ -683,7 +683,14 @@ def main(args):
                 # do gradient clipping
                 if args.max_grad_norm > 0:
                     scaler.unscale_(net.optimizer)
-                    torch.nn.utils.clip_grad_norm_(net.parameters(), args.max_grad_norm)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(
+                        net.parameters(), args.max_grad_norm
+                    )
+                    writer.add_scalar(
+                        "Loss/grad_norm",
+                        grad_norm,
+                        epoch * len(train_loader) + batch_num,
+                    )
                 scaler.step(net.optimizer)
                 scaler.update()
                 net.optimizer.zero_grad(set_to_none=args.set_to_none)
