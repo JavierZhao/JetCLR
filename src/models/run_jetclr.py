@@ -483,8 +483,12 @@ def main(args):
 
     if args.continue_training:
         print("Loading model from checkpoint", flush=True, file=logfile)
-        load_path = expt_dir + "model_last.pt"
-        net.load_state_dict(torch.load(load_path))
+        model_load_path = expt_dir + "model_last.pt"
+        net.load_state_dict(torch.load(model_load_path))
+        # check if optimizer state is saved
+        optimizer_load_path = expt_dir + "optimizer_last.pt"
+        if os.path.isfile(optimizer_load_path):
+            net.optimizer.load_state_dict(torch.load(optimizer_load_path))
 
     # send network to device
     net.to(device)
@@ -566,6 +570,11 @@ def main(args):
     # turn args.use_amp into bool
     args.use_amp = args.use_amp == 1
     scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
+    if args.use_amp and args.continue_training:
+        # check if the scaler state is saved
+        if os.path.isfile(expt_dir + "scaler_last.pt"):
+            scaler.load_state_dict(torch.load(expt_dir + "scaler_last.pt"))
+
     for epoch in range(args.n_epochs):
         # initialise timing stats
         te0 = time.time()
@@ -803,8 +812,11 @@ def main(args):
 
         # save the latest model
         torch.save(net.state_dict(), expt_dir + "model_last.pt")
+        torch.save(net.optimizer.state_dict(), expt_dir + "optimizer.pt")
         if args.use_hook:
             torch.save(activations, expt_dir + "activations.pt")
+        if args.use_amp:
+            torch.save(scaler.state_dict(), expt_dir + "scaler.pt")
 
         # save the model if the validation loss is the lowest
         if losses_val[-1] < l_val_best:
