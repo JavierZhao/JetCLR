@@ -476,9 +476,8 @@ def main(args):
         train_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=args.n_workers,
+        num_workers=0,
         pin_memory=False,
-        prefetch_factor=2,
         sampler=train_sampler,
     )
 
