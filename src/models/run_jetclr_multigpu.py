@@ -660,8 +660,8 @@ def main(args):
             td7 += time8 - time7
             td8 += time9 - time8
 
+        torch.distributed.all_reduce(losses_e)
         loss_e = np.mean(np.array(losses_e))
-        torch.distributed.all_reduce(loss_e)
         losses.append(loss_e)
 
         if args.opt == "sgdslr":
