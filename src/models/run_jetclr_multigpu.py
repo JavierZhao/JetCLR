@@ -531,56 +531,59 @@ def main(args):
 
         # calculate the average cosine similarity for each class
         # initialize the arrays to store the average cosine similarities
-        avg_similarities = np.zeros(num_classes)
-        counts = np.zeros(num_classes, dtype=int)
-        with torch.no_grad():
-            net.eval()
-            total = int(len(test_dataset) / args.batch_size)
-            pbar_t = tqdm.tqdm(
-                test_loader,
-                total=total // 10,
-                desc=f"Inference for Epoch {epoch}",
-            )
-
-            for i, (batch_data, batch_labels) in enumerate(pbar_t):
-                if i == total // 10:
-                    break
-                batch_data = batch_data.to(
-                    args.device
-                )  # Assuming shape (batch_size, 7, 128)
-                batch_labels = batch_labels.to(
-                    args.device
-                )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                x_i, x_j, times = augmentation(args, batch_data)
-                batch_size = x_i.shape[0]
-                x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_i = F.normalize(x_i, dim=1)
-                z_j = F.normalize(x_j, dim=1)
-                z = torch.cat([z_i, z_j], dim=0)
-                similarity_matrix = F.cosine_similarity(
-                    z.unsqueeze(1), z.unsqueeze(0), dim=2
+        if epoch != 0:
+            avg_similarities = np.zeros(num_classes)
+            counts = np.zeros(num_classes, dtype=int)
+            with torch.no_grad():
+                net.eval()
+                total = int(len(test_dataset) / args.batch_size)
+                pbar_t = tqdm.tqdm(
+                    test_loader,
+                    total=total // 10,
+                    desc=f"Inference for Epoch {epoch}",
                 )
-                sim_ij = torch.diag(similarity_matrix, batch_size)
 
-                # Convert batch_labels from one-hot to indices for easier processing
-                labels_indices = torch.argmax(batch_labels, dim=1)
+                for i, (batch_data, batch_labels) in enumerate(pbar_t):
+                    if i == total // 10:
+                        break
+                    batch_data = batch_data.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 7, 128)
+                    batch_labels = batch_labels.to(
+                        args.device
+                    )  # Assuming shape (batch_size, 10) for one-hot encoded labels
+                    x_i, x_j, times = augmentation(args, batch_data)
+                    batch_size = x_i.shape[0]
+                    x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_i = F.normalize(x_i, dim=1)
+                    z_j = F.normalize(x_j, dim=1)
+                    z = torch.cat([z_i, z_j], dim=0)
+                    similarity_matrix = F.cosine_similarity(
+                        z.unsqueeze(1), z.unsqueeze(0), dim=2
+                    )
+                    sim_ij = torch.diag(similarity_matrix, batch_size)
 
-                # Iterate through each label index and append the corresponding sim_ij value
-                for label_idx in range(labels_indices.size(0)):
-                    label = labels_indices[label_idx].item()
-                    sim_value = sim_ij[label_idx].item()
+                    # Convert batch_labels from one-hot to indices for easier processing
+                    labels_indices = torch.argmax(batch_labels, dim=1)
 
-                    avg_similarities[label] += sim_value
-                    counts[label] += 1
+                    # Iterate through each label index and append the corresponding sim_ij value
+                    for label_idx in range(labels_indices.size(0)):
+                        label = labels_indices[label_idx].item()
+                        sim_value = sim_ij[label_idx].item()
 
-            average_similarities[epoch, :] = np.divide(
-                avg_similarities, counts, where=counts != 0
+                        avg_similarities[label] += sim_value
+                        counts[label] += 1
+
+                average_similarities[epoch, :] = np.divide(
+                    avg_similarities, counts, where=counts != 0
+                )
+            # save average similarities
+            np_save_checkpoint(
+                expt_dir + "average_similarities.npy", average_similarities
             )
-        # save average similarities
-        np_save_checkpoint(expt_dir + "average_similarities.npy", average_similarities)
 
-        plot_avg_cosine_similarities(args, average_similarities)
+            plot_avg_cosine_similarities(args, average_similarities)
 
         # print(f"len(train_dataset): {len(train_dataset)}")
         # for i, data in enumerate(train_dataset):
