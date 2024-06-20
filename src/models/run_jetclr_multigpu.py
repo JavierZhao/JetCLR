@@ -477,7 +477,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.n_workers,
-        pin_memory=True,
+        pin_memory=False,
         prefetch_factor=2,
         sampler=train_sampler,
     )
