@@ -585,7 +585,7 @@ def main(args):
         if os.path.isfile(expt_dir + "scaler_last.pt"):
             scaler.load_state_dict(torch.load(expt_dir + "scaler_last.pt"))
 
-    profile_active = args.profile
+    profile_active = True
     for epoch in range(args.n_epochs):
         # initialise timing stats
         te0 = time.time()
@@ -755,7 +755,8 @@ def main(args):
                 writer.add_scalar(
                     "Loss/train", loss.item(), epoch * len(train_loader) + batch_num
                 )
-                prof.step()
+                if profile_active:
+                    prof.step()
                 if batch_num == 100 and args.profile:
                     break
 
