@@ -14,6 +14,7 @@ import argparse
 import copy
 import tqdm
 import gc
+from contextlib import contextmanager
 
 # load torch modules
 import torch
@@ -290,6 +291,15 @@ def save_activation(args, name):
                 )
 
     return hook
+
+
+@contextmanager
+def optional_profiling(active, *args, **kwargs):
+    if active:
+        with profile(*args, **kwargs) as prof:
+            yield prof
+    else:
+        yield None
 
 
 def main(args):
@@ -575,6 +585,7 @@ def main(args):
         if os.path.isfile(expt_dir + "scaler_last.pt"):
             scaler.load_state_dict(torch.load(expt_dir + "scaler_last.pt"))
 
+    profile_active = args.profile
     for epoch in range(args.n_epochs):
         # initialise timing stats
         te0 = time.time()
@@ -653,8 +664,8 @@ def main(args):
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
-
-        with profile(
+        with optional_profiling(
+            profile_active,
             activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
             schedule=torch.profiler.schedule(wait=3, warmup=1, active=5, repeat=1),
             on_trace_ready=tensorboard_trace_handler(writer.log_dir),
@@ -747,6 +758,9 @@ def main(args):
                 prof.step()
                 if batch_num == 100 and args.profile:
                     break
+
+            if profile_active:
+                profile_active = False  # Only profile the first epoch
 
         losses_e_tensor = torch.stack(losses_e).cpu().numpy()
         loss_e = np.mean(losses_e_tensor)
