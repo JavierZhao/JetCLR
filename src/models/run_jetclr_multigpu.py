@@ -485,9 +485,8 @@ def main(args):
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=args.n_workers,
-        pin_memory=True,
-        prefetch_factor=2,
+        num_workers=0,
+        pin_memory=False,
         sampler=val_sampler,
     )
 
@@ -662,7 +661,7 @@ def main(args):
             td8 += time9 - time8
 
         loss_e = np.mean(np.array(losses_e))
-        torch.dist.all_reduce(loss_e)
+        torch.distributed.all_reduce(loss_e)
         losses.append(loss_e)
 
         if args.opt == "sgdslr":
@@ -690,7 +689,7 @@ def main(args):
                 losses_e_val.append(val_loss.detach().cpu().numpy())
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
             loss_e_val = np.mean(np.array(losses_e_val))
-            torch.dist.all_reduce(loss_e_val)
+            torch.distributed.all_reduce(loss_e_val)
             losses_val.append(loss_e_val)
 
         log_info(
