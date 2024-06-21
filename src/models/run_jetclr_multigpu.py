@@ -673,8 +673,8 @@ def main(args):
     average_similarities = np.zeros((args.n_epochs, num_classes))
 
     l_val_best = 1000000  # initialise the best validation loss
-    if dist.get_rank() == 0:
-        writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
+    # if dist.get_rank() == 0:
+    writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
     # Automatic Mixed Precision
     # turn args.use_amp into bool
     args.use_amp = args.use_amp == 1
