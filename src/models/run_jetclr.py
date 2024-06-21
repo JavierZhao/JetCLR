@@ -745,7 +745,7 @@ def main(args):
                         if torch.any(torch.isinf(param.grad)):
                             print(f"Inf gradients in {name}")
 
-                # update timiing stats
+                # update timing stats
                 td_aug += time2 - time1
                 td_forward += time3 - time2
                 td_loss += time4 - time3
@@ -811,8 +811,8 @@ def main(args):
                 )
             loss_e_val = np.mean(np.array(losses_e_val))
             losses_val.append(loss_e_val)
-        t_val_end = time.time()
-        td_val = t_val_end - t_val_start
+            t_val_end = time.time()
+            td_val = t_val_end - t_val_start
 
         print(
             "epoch: "

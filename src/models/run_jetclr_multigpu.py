@@ -14,6 +14,7 @@ import argparse
 import copy
 import tqdm
 import gc
+from contextlib import contextmanager
 
 # load torch modules
 import torch
@@ -22,19 +23,25 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-
+from torch.utils.tensorboard import SummaryWriter
+from torch.profiler import (
+    profile,
+    record_function,
+    ProfilerActivity,
+    tensorboard_trace_handler,
+)
 from datetime import timedelta
 
 # Add the root directory of the project to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, project_root)
 # load custom modules required for jetCLR training
-from src.modules.jet_augs import (
-    rotate_jets,
-    distort_jets,
-    translate_jets,
-    collinear_fill_jets,
-)
+# from src.modules.jet_augs import (
+#     rotate_jets,
+#     distort_jets,
+#     translate_jets,
+#     collinear_fill_jets,
+# )
 from src.modules.transformer import Transformer
 from src.modules.losses import contrastive_loss, align_loss, uniform_loss
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
@@ -58,7 +65,7 @@ def cleanup():
     dist.destroy_process_group()
 
 
-def augmentation(args, x_i):
+def augmentation_cpu(args, x_i):
     x_i = x_i.cpu().numpy()
     # x_i has shape (batch_size, 7, n_constit)
     # dim 1 ordering: 'part_eta','part_phi','part_pt_log', 'part_e_log', 'part_logptrel', 'part_logerel','part_deltaR'
@@ -68,23 +75,18 @@ def augmentation(args, x_i):
     eta = x_i[:, 0, :]
     phi = x_i[:, 1, :]
     x_i = np.stack([pT, eta, phi], 1)  # (batch_size, 3, n_constit)
-    time1 = time.time()
     x_i = rotate_jets(x_i)
     x_j = x_i.copy()
     if args.rot:
         x_j = rotate_jets(x_j)
-    time2 = time.time()
     if args.cf:
         x_j = collinear_fill_jets(x_j)
         x_j = collinear_fill_jets(x_j)
-    time3 = time.time()
     if args.ptd:
         x_j = distort_jets(x_j, strength=args.ptst, pT_clip_min=args.ptcm)
-    time4 = time.time()
     if args.trs:
         x_j = translate_jets(x_j, width=args.trsw)
         x_i = translate_jets(x_i, width=args.trsw)
-    time5 = time.time()
     # recalculate the rest of the features after augmentation
     pT_i = x_i[:, 0, :]
     eta_i = x_i[:, 1, :]
@@ -151,8 +153,93 @@ def augmentation(args, x_i):
     )  # (batch_size, 6, n_constit)
     x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
     x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
-    times = [time1, time2, time3, time4, time5]
-    return x_i, x_j, times
+    return x_i, x_j
+
+
+def augmentation_gpu(args, x_i):
+    device = args.device
+    # Assuming x_i is a PyTorch tensor on the appropriate device
+    # x_i has shape (batch_size, 7, n_constit)
+    # Extract the (pT, eta, phi) features for augmentations
+    log_pT = x_i[:, 2, :]
+    pT = torch.where(log_pT != 0, torch.exp(log_pT), torch.zeros_like(log_pT))
+    eta = x_i[:, 0, :]
+    phi = x_i[:, 1, :]
+    x_i = torch.stack([pT, eta, phi], dim=1)  # (batch_size, 3, n_constit)
+
+    x_i = rotate_jets(x_i, device)
+    x_j = x_i.clone()
+    if args.rot:
+        x_j = rotate_jets(x_j, device)
+    if args.cf:
+        x_j = collinear_fill_jets(x_j, device)
+        x_j = collinear_fill_jets(x_j, device)
+    if args.ptd:
+        x_j = distort_jets(x_j, device, strength=args.ptst, pT_clip_min=args.ptcm)
+    if args.trs:
+        x_j = translate_jets(x_j, device, width=args.trsw)
+        x_i = translate_jets(x_i, device, width=args.trsw)
+
+    torch.cuda.synchronize()  # Ensure all operations are completed
+
+    # Recalculate the rest of the features after augmentation
+    # pT logs
+    # pT_log_i = torch.log(torch.clamp(x_i[:, 0, :], min=1e-6))
+    # pT_log_j = torch.log(torch.clamp(x_j[:, 0, :], min=1e-6))
+    pT_log_i = torch.where(x_i[:, 0, :] != 0, torch.log(x_i[:, 0, :]), 0)
+    pT_log_j = torch.where(x_j[:, 0, :] != 0, torch.log(x_j[:, 0, :]), 0)
+
+    # pTrel
+    pT_sum_i = x_i[:, 0, :].sum(dim=-1, keepdim=True)
+    pT_sum_j = x_j[:, 0, :].sum(dim=-1, keepdim=True)
+    pt_rel_i = x_i[:, 0, :] / pT_sum_i
+    pt_rel_j = x_j[:, 0, :] / pT_sum_j
+    pt_rel_log_i = torch.log(torch.clamp(pt_rel_i, min=1e-6))
+    pt_rel_log_j = torch.log(torch.clamp(pt_rel_j, min=1e-6))
+
+    # E
+    E_i = x_i[:, 0, :] * torch.cosh(x_i[:, 1, :])
+    E_j = x_j[:, 0, :] * torch.cosh(x_j[:, 1, :])
+    E_log_i = torch.log(torch.clamp(E_i, min=1e-6))
+    E_log_j = torch.log(torch.clamp(E_j, min=1e-6))
+
+    # Erel
+    E_sum_i = E_i.sum(dim=-1, keepdim=True)
+    E_sum_j = E_j.sum(dim=-1, keepdim=True)
+    E_rel_i = E_i / E_sum_i
+    E_rel_j = E_j / E_sum_j
+    E_rel_log_i = torch.log(torch.clamp(E_rel_i, min=1e-6))
+    E_rel_log_j = torch.log(torch.clamp(E_rel_j, min=1e-6))
+
+    # Stack them to obtain the final augmented data
+    x_i = torch.stack(
+        [
+            x_i[:, 1, :],  # eta_i
+            x_i[:, 2, :],  # phi_i
+            pT_log_i,
+            E_log_i,
+            pt_rel_log_i,
+            E_rel_log_i,
+        ],
+        1,
+    ).transpose(
+        1, 2
+    )  # (batch_size, 6, n_constit)
+
+    x_j = torch.stack(
+        [
+            x_j[:, 1, :],  # eta_j
+            x_j[:, 2, :],  # phi_j
+            pT_log_j,
+            E_log_j,
+            pt_rel_log_j,
+            E_rel_log_j,
+        ],
+        1,
+    ).transpose(
+        1, 2
+    )  # (batch_size, 6, n_constit)
+    return x_i, x_j
 
 
 class_labels = ["QCD", "Hbb", "Hcc", "Hgg", "H4q", "Hqql", "Zqq", "Wqq", "Tbqq", "Tbl"]
@@ -196,6 +283,38 @@ def plot_avg_cosine_similarities(args, avg_similarities):
             bbox_inches="tight",
         )
         plt.close()
+
+
+activations = {}
+first_nan_inf_detected = False  # Flag to track if NaN or inf has been recorded
+
+
+def save_activation(args, name):
+    def hook(model, input, output):
+        if type(output) is tuple:
+            output = output[0]
+        global first_nan_inf_detected
+        if not first_nan_inf_detected:  # Check if NaN or inf has already been detected
+            activations[name] = output.detach()
+            if torch.isnan(output).any() or torch.isinf(output).any():
+                first_nan_inf_detected = (
+                    True  # Set the flag to prevent further recordings
+                )
+                print(f"Hook NaN or inf detected in {name}")
+                print(
+                    f"Hook NaN or inf detected in {name}", file=args.logfile, flush=True
+                )
+
+    return hook
+
+
+@contextmanager
+def optional_profiling(active, *args, **kwargs):
+    if active and dist.get_rank() == 0:
+        with profile(*args, **kwargs) as prof:
+            yield prof
+    else:
+        yield None
 
 
 def log_info(message, file=None, flush=True):
@@ -243,11 +362,26 @@ def main(args):
     args.save_plot_path = f"/ssl-jet-vol-v3/JetCLR/plots/cosine_similarity/{args.label}"
     args.n_heads = 4
     args.opt = "adam"
-    args.learning_rate = 0.00005 * args.batch_size / 128
+    # args.learning_rate = 0.00005 * args.batch_size / 128
+    args.learning_rate = args.base_lr * args.batch_size / 128
 
     # initialise logfile
     logfile = open(args.logfile, "a")
+    if args.continue_training:
+        log_info("-----------------------------------", file=logfile, flush=True)
+        log_info("-----------------------------------", file=logfile, flush=True)
+        log_info("continuing training", file=logfile, flush=True)
+        log_info("-----------------------------------", file=logfile, flush=True)
+        log_info("-----------------------------------", file=logfile, flush=True)
+
     log_info("logfile initialised", file=logfile, flush=True)
+    if args.aug_device == "cpu":
+        augmentation = augmentation_cpu
+        log_info("Running augmentations on cpu ", file=logfile, flush=True)
+    else:
+        augmentation = augmentation_gpu
+        log_info("Running augmentations on cuda ", file=logfile, flush=True)
+
     # log_info number of workers
     log_info("number of workers: " + str(args.n_workers), file=logfile, flush=True)
 
@@ -270,13 +404,19 @@ def main(args):
     expt_dir = base_dir + "JetClass" + expt_tag + "/"
 
     # check if experiment already exists and is not empty
-    if os.path.isdir(expt_dir) and os.listdir(expt_dir):
-        sys.exit(
-            "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
-        )
+    if not args.continue_training:
+        if os.path.isdir(expt_dir) and os.listdir(expt_dir):
+            sys.exit(
+                "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
+            )
+        else:
+            # This will create the directory if it does not exist or if it is empty
+            os.makedirs(expt_dir, exist_ok=True)
     else:
-        # This will create the directory if it does not exist or if it is empty
-        os.makedirs(expt_dir, exist_ok=True)
+        if not os.path.isdir(expt_dir) or not os.listdir(expt_dir):
+            sys.exit(
+                "ERROR: experiment does not exist or is empty, cannot continue training"
+            )
     log_info("experiment: " + str(args.label), file=logfile, flush=True)
     log_info(f"World size: {args.world_size}", file=logfile, flush=True)
 
@@ -415,17 +555,48 @@ def main(args):
         dropout=0.1,
         opt=args.opt,
         log=True,
+        eps=args.eps,
     )
 
     # Move the model to the correct device
     device = torch.device(f"cuda:{rank}")
+    if args.continue_training:
+        log_info("Loading model from checkpoint", flush=True, file=logfile)
+        model_load_path = expt_dir + "model_last.pt"
+
+        # Load model state
+        state_dict = torch.load(
+            model_load_path, map_location=lambda storage, loc: storage.cuda(rank)
+        )
+        net.load_state_dict(state_dict)
+
+        # Wrap the model with DistributedDataParallel after loading the state
+        net = DDP(net, device_ids=[rank])
+
+        # Load optimizer state if it exists
+        optimizer_load_path = expt_dir + "optimizer_last.pt"
+        if os.path.isfile(optimizer_load_path):
+            optimizer_state = torch.load(
+                optimizer_load_path,
+                map_location=lambda storage, loc: storage.cuda(rank),
+            )
+            optimizer.load_state_dict(optimizer_state)
+
     args.device = device
     net.to(device)
+    log_info(net, flush=True, file=logfile)
     net = DDP(net, device_ids=[rank])
+
+    if args.use_hook:
+        print("Registering forward hooks", flush=True, file=logfile)
+        for name, module in net.named_modules():
+            # if isinstance(module, (nn.Linear, nn.LayerNorm, nn.TransformerEncoder)):
+            module.register_forward_hook(save_activation(args, name))
+
     log_info("\nmodel initialised and sent to devices", flush=True, file=logfile)
 
     # set up the optimiser
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
+    optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate, eps=args.eps)
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
@@ -502,7 +673,19 @@ def main(args):
     average_similarities = np.zeros((args.n_epochs, num_classes))
 
     l_val_best = 1000000  # initialise the best validation loss
-    # the loop
+    if dist.get_rank() == 0:
+        writer = SummaryWriter(log_dir=f"./logs/profile/{args.label}")
+    # Automatic Mixed Precision
+    # turn args.use_amp into bool
+    args.use_amp = args.use_amp == 1
+    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
+    if args.use_amp and args.continue_training:
+        # check if the scaler state is saved
+        if os.path.isfile(expt_dir + "scaler_last.pt"):
+            scaler.load_state_dict(torch.load(expt_dir + "scaler_last.pt"))
+
+    profile_active = True
+
     for epoch in range(args.n_epochs):
         log_info("epoch: " + str(epoch), flush=True, file=logfile)
         train_sampler.set_epoch(epoch)
@@ -518,18 +701,16 @@ def main(args):
         losses_e_val = []
 
         # initialise timing stats
-        td1 = 0
-        td2 = 0
-        td3 = 0
-        td4 = 0
-        td5 = 0
-        td6 = 0
-        td7 = 0
-        td8 = 0
+        td_aug = 0
+        td_forward = 0
+        td_loss = 0
+        td_backward = 0
+
+        t_cos_sim_start = time.time()
 
         # calculate the average cosine similarity for each class
         # initialize the arrays to store the average cosine similarities
-        if epoch != 0:
+        if not args.profile:
             avg_similarities = np.zeros(num_classes)
             counts = np.zeros(num_classes, dtype=int)
             with torch.no_grad():
@@ -550,7 +731,7 @@ def main(args):
                     batch_labels = batch_labels.to(
                         args.device
                     )  # Assuming shape (batch_size, 10) for one-hot encoded labels
-                    x_i, x_j, times = augmentation(args, batch_data)
+                    x_i, x_j = augmentation(args, batch_data)
                     batch_size = x_i.shape[0]
                     x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
                     x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
@@ -577,12 +758,14 @@ def main(args):
                     avg_similarities, counts, where=counts != 0
                 )
             # save average similarities
-            np_save_checkpoint(
-                expt_dir + "average_similarities.npy", average_similarities
-            )
+            if epoch != 0:
+                np_save_checkpoint(
+                    expt_dir + "average_similarities.npy", average_similarities
+                )
 
             plot_avg_cosine_similarities(args, average_similarities)
-
+            t_cos_sim_end = time.time()
+            td_cos_sim = t_cos_sim_end - t_cos_sim_start
         # print(f"len(train_dataset): {len(train_dataset)}")
         # for i, data in enumerate(train_dataset):
         #     print(f"Data sample {i}: {data.shape}")
@@ -606,71 +789,134 @@ def main(args):
 
         # the inner loop goes through the dataset batch by batch
         # augmentations of the jets are done on the fly
-
-        net.train()
-        total_train = int(len(train_dataset) / (args.batch_size * args.world_size))
-        pbar_t = tqdm.tqdm(
-            train_loader,
-            total=total_train,
-            desc="Training",
-        )
-        log_info("total batches: " + str(total_train), flush=True, file=logfile)
-        for i, batch in enumerate(pbar_t):
-            # log_info("batch: " + str(i), flush=True, file=logfile)
-            batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-            # print_data_device_info(batch)
-            optimizer.zero_grad()
-            x_i, x_j, times = augmentation(args, batch)
-            time1, time2, time3, time4, time5 = times
-            time6 = time.time()
-            z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-            z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
-            time7 = time.time()
-            # calculate the alignment and uniformity loss for each batch
-            loss_align = align_loss(z_i, z_j)
-            loss_uniform_zi = uniform_loss(z_i)
-            loss_uniform_zj = uniform_loss(z_j)
-            loss_align_e.append(loss_align.detach().cpu().numpy())
-            loss_uniform_e.append(
-                (
-                    loss_uniform_zi.detach().cpu().numpy()
-                    + loss_uniform_zj.detach().cpu().numpy()
-                )
-                / 2
+        with optional_profiling(
+            profile_active,
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=torch.profiler.schedule(wait=3, warmup=1, active=5, repeat=1),
+            on_trace_ready=tensorboard_trace_handler(writer.log_dir),
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=False,
+        ) as prof:
+            net.train()
+            total_train = int(len(train_dataset) / (args.batch_size * args.world_size))
+            pbar_t = tqdm.tqdm(
+                train_loader,
+                total=total_train,
+                desc="Training",
             )
-            time8 = time.time()
+            log_info("total batches: " + str(total_train), flush=True, file=logfile)
+            for batch_num, batch in enumerate(pbar_t):
+                time1 = time.time()
+                batch = batch.to(args.device)  # shape (batch_size, 7, 128)
+                x_i, x_j = augmentation(args, batch)
+                time2 = time.time()
+                with torch.autocast(
+                    device_type="cuda", dtype=torch.float16, enabled=args.use_amp
+                ):
+                    # with torch.autocast(device_type="cuda", enabled=False):
+                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    time3 = time.time()
+                    # calculate the alignment and uniformity loss for each batch
+                    loss_align = align_loss(z_i, z_j)
+                    loss_uniform_zi = uniform_loss(z_i)
+                    loss_uniform_zj = uniform_loss(z_j)
+                    with torch.no_grad():
+                        loss_align_e.append(loss_align.detach())
+                        loss_uniform_e.append(
+                            (loss_uniform_zi.detach() + loss_uniform_zj.detach()) / 2
+                        )
+                    time4 = time.time()
 
-            # compute the loss, back-propagate, and update scheduler if required
-            loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
-            loss.backward()
-            optimizer.step()
-            if args.opt == "sgdca":
-                scheduler.step(epoch + i / iters)
-            losses_e.append(loss.detach().cpu().numpy())
-            time9 = time.time()
-            pbar_t.set_description(f"Training loss: {loss:.4f}")
+                # compute the loss, back-propagate, and update scheduler if required
 
-            # update timiing stats
-            td1 += time2 - time1
-            td2 += time3 - time2
-            td3 += time4 - time3
-            td4 += time5 - time4
-            td5 += time6 - time5
-            td6 += time7 - time6
-            td7 += time8 - time7
-            td8 += time9 - time8
+                loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
+                scaler.scale(loss).backward()
+                # do gradient clipping
+                if args.max_grad_norm > 0:
+                    scaler.unscale_(optimizer)
+                    grad_norm = torch.nn.utils.clip_grad_norm_(
+                        net.parameters(), args.max_grad_norm
+                    )
+                    if dist.get_rank() == 0:
+                        writer.add_scalar(
+                            "Loss/grad_norm",
+                            grad_norm,
+                            epoch * len(train_loader) + batch_num,
+                        )
+                scaler.step(optimizer)
+                scaler.update()
+                if dist.get_rank() == 0:
+                    writer.add_scalar(
+                        "Loss/scaler_scale",
+                        scaler._scale,
+                        epoch * len(train_loader) + batch_num,
+                    )
+                optimizer.zero_grad(set_to_none=args.set_to_none)
 
-        # torch.distributed.all_reduce(losses_e)
-        loss_e = np.mean(np.array(losses_e))
+                if args.opt == "sgdca":
+                    scheduler.step(epoch + i / iters)
+                losses_e.append(loss.detach())
+                time5 = time.time()
+                pbar_t.set_description(f"Training loss: {loss:.4f}")
+                #  check for NaNs and Infs in the gradients
+                for name, param in net.named_parameters():
+                    if param.grad is not None:
+                        if torch.any(torch.isnan(param.grad)):
+                            print(f"NaN gradients in {name}")
+                        if torch.any(torch.isinf(param.grad)):
+                            print(f"Inf gradients in {name}")
+                # update timing stats
+                td_aug += time2 - time1
+                td_forward += time3 - time2
+                td_loss += time4 - time3
+                td_backward += time5 - time4
+
+                # Log training loss to TensorBoard
+                # Aggregate loss from all processes
+                aggregated_loss = torch.tensor(loss.item()).to(args.device)
+                dist.all_reduce(aggregated_loss, op=dist.ReduceOp.SUM)
+                aggregated_loss /= dist.get_world_size()
+
+                if dist.get_rank() == 0:
+                    writer.add_scalar(
+                        "Loss/average_train",
+                        aggregated_loss.item(),
+                        epoch * len(train_loader) + batch_num,
+                    )
+                if profile_active:
+                    prof.step()
+                if batch_num == 100 and args.profile:
+                    break
+            if profile_active:
+                profile_active = False  # Only profile the first epoch
+
+        losses_e_tensor = torch.stack(losses_e).cpu().numpy()
+        loss_e = np.mean(losses_e_tensor)
         losses.append(loss_e)
+        # summarise alignment and uniformity stats
+        losses_align_array = torch.stack(loss_align_e).cpu().numpy()
+        losses_uniform_array = torch.stack(loss_uniform_e).cpu().numpy()
+        loss_align_epochs.append(np.mean(losses_align_array))
+        loss_uniform_epochs.append(np.mean(losses_uniform_array))
+        log_info(
+            "alignment: "
+            + str(loss_align_epochs[-1])
+            + ", uniformity: "
+            + str(loss_uniform_epochs[-1]),
+            flush=True,
+            file=logfile,
+        )
+
+        if args.profile:
+            break
 
         if args.opt == "sgdslr":
             scheduler.step()
 
-        te1 = time.time()
-
         # calculate validation loss at the end of the epoch
-
+        t_val_start = time.time()
         with torch.no_grad():
             net.eval()
             pbar_v = tqdm.tqdm(
@@ -680,17 +926,29 @@ def main(args):
             )
             for _, batch in enumerate(pbar_v):
                 batch = batch.to(args.device)  # shape (batch_size, 7, 128)
-                optimizer.zero_grad()
-                y_i, y_j, times = augmentation(args, batch)
-                time1, time2, time3, time4, time5 = times
+                optimizer.zero_grad(set_to_none=args.set_to_none)
+                y_i, y_j = augmentation(args, batch)
+
                 z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
                 z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
                 val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
                 losses_e_val.append(val_loss.detach().cpu().numpy())
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
+                # aggregate loss from all processes
+                aggregated_val_loss = torch.tensor(val_loss.item()).to(args.device)
+                dist.all_reduce(aggregated_val_loss, op=dist.ReduceOp.SUM)
+                aggregated_val_loss /= dist.get_world_size()
+
+                if dist.get_rank() == 0:
+                    writer.add_scalar(
+                        "Loss/average_val",
+                        aggregated_val_loss.item(),
+                        epoch * len(val_loader) + batch_num,
+                    )
             loss_e_val = np.mean(np.array(losses_e_val))
-            # torch.distributed.all_reduce(loss_e_val)
             losses_val.append(loss_e_val)
+            t_val_end = time.time()
+            td_val = t_val_end - t_val_start
 
         log_info(
             "epoch: "
@@ -704,7 +962,15 @@ def main(args):
         )
 
         # save the latest model
-        torch_save_checkpoint(net.state_dict(), expt_dir + "model_last.pt")
+        torch_save_checkpoint(
+            net.state_dict(), expt_dir + "model_last.pt"
+        )  # save the latest optimizer state
+        torch_save_checkpoint(optimizer.state_dict(), expt_dir + "optimizer_last.pt")
+        # save the latest scaler state
+        if args.use_amp:
+            torch.save(scaler.state_dict(), expt_dir + "scaler_last.pt")
+        if args.use_hook:
+            torch_save_checkpoint(activations, expt_dir + "activations_last.pt")
 
         # save the model if the validation loss is the lowest
         if losses_val[-1] < l_val_best:
@@ -716,22 +982,12 @@ def main(args):
             )
             torch_save_checkpoint(net.state_dict(), expt_dir + "model_best.pt")
 
-        # summarise alignment and uniformity stats
-        loss_align_epochs.append(np.mean(np.array(loss_align_e)))
-        loss_uniform_epochs.append(np.mean(np.array(loss_uniform_e)))
-        log_info(
-            "alignment: "
-            + str(loss_align_epochs[-1])
-            + ", uniformity: "
-            + str(loss_uniform_epochs[-1]),
-            flush=True,
-            file=logfile,
-        )
+        te1 = time.time()
 
         if args.opt == "sgdca" or args.opt == "sgdslr":
             log_info("lr: " + str(scheduler._last_lr), flush=True, file=logfile)
         log_info(
-            f"total time taken: {round( te1-te0, 1 )}s, augmentation: {round(td1+td2+td3+td4+td5,1)}s, forward {round(td6, 1)}s, backward {round(td8, 1)}s, other {round(te1-te0-(td1+td2+td3+td4+td6+td7+td8), 2)}s",
+            f"total time taken: {round( te1-te0, 1 )}s, cosine similarity: {round(td_cos_sim, 1)}s, augmentation: {round(td_aug,1)}s,, forward {round(td_forward, 1)}s, loss {round(td_loss, 1)}s, backward {round(td_backward, 1)}s, validation {round(td_val, 1)}s",
             flush=True,
             file=logfile,
         )
@@ -852,6 +1108,11 @@ def main(args):
         np_save_checkpoint(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
+    log_info(
+        prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
+        flush=True,
+        file=logfile,
+    )
 
     log_info(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
@@ -964,6 +1225,78 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--continue-training",
+        type=int,
+        action="store",
+        dest="continue_training",
+        default=0,
+        help="continue training from a saved model",
+    )
+    parser.add_argument(
+        "--base-lr",
+        type=float,
+        action="store",
+        dest="base_lr",
+        default=5e-5,
+        help="base learning rate, to be multiplied by batch size / 128",
+    )
+    parser.add_argument(
+        "--eps",
+        type=float,
+        action="store",
+        dest="eps",
+        default=1e-8,
+        help="epsilon value for Adam optimizer (https://pytorch.org/docs/stable/generated/torch.optim.Adam.html)",
+    )
+    parser.add_argument(
+        "--use-hook",
+        type=int,
+        action="store",
+        dest="use_hook",
+        default=0,
+        help="use hooks to identify nan or inf (https://discuss.pytorch.org/t/how-can-l-load-my-best-model-as-a-feature-extractor-evaluator/17254/6)",
+    )
+    parser.add_argument(
+        "--max-grad-norm",
+        type=float,
+        action="store",
+        dest="max_grad_norm",
+        default=0,
+        help="max_norm in torch.nn.utils.clip_grad_norm_ (https://pytorch.org/docs/stable/generated/torch.nn.utils.clip_grad_norm_.html)",
+    )
+    parser.add_argument(
+        "--use-amp",
+        type=int,
+        action="store",
+        dest="use_amp",
+        default=0,
+        help="use automatic mixed precision (https://pytorch.org/tutorials/recipes/recipes/amp_recipe.html)",
+    )
+    parser.add_argument(
+        "--set-to-none",
+        type=int,
+        action="store",
+        dest="set_to_none",
+        default=0,
+        help="set gradients to None in optimizer (https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html)",
+    )
+    parser.add_argument(
+        "--profile",
+        type=int,
+        action="store",
+        dest="profile",
+        default=0,
+        help="do profiling (only run first few batches)",
+    )
+    parser.add_argument(
+        "--aug-device",
+        type=str,
+        action="store",
+        dest="aug_device",
+        default="cpu",
+        help="device to run augmentations on (cpu or gpu)",
+    )
     parser.add_argument(
         "--person",
         type=str,
@@ -1152,4 +1485,20 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.world_size = torch.cuda.device_count()
+    if args.aug_device == "cpu":
+        print("Using cpu version of augmentation")
+        from src.modules.jet_augs import (
+            rotate_jets,
+            distort_jets,
+            translate_jets,
+            collinear_fill_jets,
+        )
+    else:
+        print("Using gpu version of augmentation")
+        from src.modules.jet_augs_gpu import (
+            rotate_jets,
+            distort_jets,
+            translate_jets,
+            collinear_fill_jets,
+        )
     main(args)
