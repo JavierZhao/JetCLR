@@ -660,7 +660,7 @@ def main(args):
             td7 += time8 - time7
             td8 += time9 - time8
 
-        torch.distributed.all_reduce(losses_e)
+        # torch.distributed.all_reduce(losses_e)
         loss_e = np.mean(np.array(losses_e))
         losses.append(loss_e)
 
@@ -689,7 +689,7 @@ def main(args):
                 losses_e_val.append(val_loss.detach().cpu().numpy())
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
             loss_e_val = np.mean(np.array(losses_e_val))
-            torch.distributed.all_reduce(loss_e_val)
+            # torch.distributed.all_reduce(loss_e_val)
             losses_val.append(loss_e_val)
 
         log_info(
