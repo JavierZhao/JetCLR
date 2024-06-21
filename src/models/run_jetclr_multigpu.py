@@ -885,7 +885,7 @@ def main(args):
                         aggregated_loss.item(),
                         epoch * len(train_loader) + batch_num,
                     )
-                if profile_active:
+                if profile_active and dist.get_rank() == 0:
                     prof.step()
                 if batch_num == 100 and args.profile:
                     break
