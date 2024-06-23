@@ -1108,11 +1108,12 @@ def main(args):
         np_save_checkpoint(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
-    log_info(
-        prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
-        flush=True,
-        file=logfile,
-    )
+    if prof is not None:
+        log_info(
+            prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
+            flush=True,
+            file=logfile,
+        )
 
     log_info(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
