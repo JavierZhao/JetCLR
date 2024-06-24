@@ -105,6 +105,7 @@ class JetClassDataset(Dataset):
 
         # Clear cache if this is the last jet in the file
         if jet_idx == len(data) - 1:
+            print(f"Clearing cache for {data_path}", flush=True)
             del self.cache[data_path]
 
         if self.load_labels:
