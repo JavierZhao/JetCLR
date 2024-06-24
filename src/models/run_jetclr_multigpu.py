@@ -381,6 +381,7 @@ def main(args):
     else:
         augmentation = augmentation_gpu
         log_info("Running augmentations on cuda ", file=logfile, flush=True)
+    log_info("pin_memory: " + str(args.pin_memory), file=logfile, flush=True)
 
     # log_info number of workers
     log_info("number of workers: " + str(args.n_workers), file=logfile, flush=True)
@@ -648,7 +649,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=args.pin_memory,
         sampler=train_sampler,
     )
 
@@ -657,7 +658,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=args.pin_memory,
         sampler=val_sampler,
     )
 
@@ -666,7 +667,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=True,
+        pin_memory=args.pin_memory,
         sampler=test_sampler,
     )
     num_classes = 10  # Assuming classes are labeled 0 through 9
@@ -1226,6 +1227,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--pin-memory",
+        type=int,
+        action="store",
+        dest="pin_memory",
+        default=0,
+        help="pin_memory in data loader",
+    )
     parser.add_argument(
         "--continue-training",
         type=int,
