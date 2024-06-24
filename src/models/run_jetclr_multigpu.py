@@ -648,7 +648,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         sampler=train_sampler,
     )
 
@@ -657,7 +657,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         sampler=val_sampler,
     )
 
@@ -666,7 +666,7 @@ def main(args):
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=0,
-        pin_memory=False,
+        pin_memory=True,
         sampler=test_sampler,
     )
     num_classes = 10  # Assuming classes are labeled 0 through 9
