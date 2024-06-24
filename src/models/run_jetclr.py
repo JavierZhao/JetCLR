@@ -544,13 +544,14 @@ def main(args):
         iters = int(len(train_dataset) / args.batch_size)
         print("number of iterations per epoch: " + str(iters), flush=True, file=logfile)
 
+    prefetch_factor = 2 if args.n_workers > 0 else None
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=2,
+        prefetch_factor=prefetch_factor,
     )
 
     val_loader = DataLoader(
@@ -559,7 +560,7 @@ def main(args):
         shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=2,
+        prefetch_factor=prefetch_factor,
     )
     test_loader = DataLoader(
         test_dataset,
@@ -567,7 +568,7 @@ def main(args):
         shuffle=False,
         num_workers=args.n_workers,
         pin_memory=True,
-        prefetch_factor=2,
+        prefetch_factor=prefetch_factor,
     )
     num_classes = 10  # Assuming classes are labeled 0 through 9
     average_similarities = np.zeros((args.n_epochs, num_classes))
