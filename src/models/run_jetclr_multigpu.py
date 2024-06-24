@@ -648,7 +648,7 @@ def main(args):
         train_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=args.n_workers,
         pin_memory=args.pin_memory,
         sampler=train_sampler,
     )
@@ -1327,7 +1327,7 @@ if __name__ == "__main__":
         type=int,
         action="store",
         dest="n_workers",
-        default=2,
+        default=0,
         help="number of workers for data loading",
     )
     parser.add_argument(
