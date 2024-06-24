@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import os
 import torch
+import gc
 
 
 class JetClassDataset(Dataset):
@@ -105,8 +106,9 @@ class JetClassDataset(Dataset):
 
         # Clear cache if this is the last jet in the file
         if jet_idx == len(data) - 1:
-            print(f"Clearing cache for {data_path}", flush=True)
+            # print(f"Clearing cache for {data_path}", flush=True)
             del self.cache[data_path]
+            gc.collect()
 
         if self.load_labels:
             label_path = self.label_files[file_idx]
