@@ -86,8 +86,8 @@ class JetClassDataset(Dataset):
         if flag == "val" and args.percent in [1, 5]:
             self.jets_per_file = int(50e3)  # 50k jets per file
         self.total_jets = int(self.jets_per_file * len(self.data_files))
-        print(f"jets per file: {self.jets_per_file}", flush=True, file=logfile)
-        print(f"total jets: {self.total_jets}", flush=True, file=logfile)
+        print(f"jets per file: {self.jets_per_file:.2e}", flush=True, file=logfile)
+        print(f"total jets: {self.total_jets:.2e}", flush=True, file=logfile)
         self.cache = {}  # Initialize an empty cache
 
     def __len__(self):
@@ -103,6 +103,10 @@ class JetClassDataset(Dataset):
         data = self.cache[data_path]
         sample = data[jet_idx]
 
+        # Clear cache if this is the last jet in the file
+        if jet_idx == len(data) - 1:
+            del self.cache[data_path]
+
         if self.load_labels:
             label_path = self.label_files[file_idx]
             # Check cache for labels; load and cache if not present
@@ -110,6 +114,10 @@ class JetClassDataset(Dataset):
                 self.cache[label_path] = torch.load(label_path)
             labels = self.cache[label_path]
             label = labels[jet_idx]
+
+            # clear label cache as well
+            if jet_idx == len(labels) - 1:
+                del self.cache[label_path]
 
         if self.transform:
             sample = self.transform(sample)
@@ -125,8 +133,8 @@ class JetClassDataset(Dataset):
     def _find_file_and_jet_index(self, global_idx):
         """
         Given a global index, find which file and which index within that file
-        corresponds to this global index, assuming each file contains exactly
-        100,000 jets.
+        corresponds to this global index, assuming each file contains the same
+        number of jets.
         """
         # Calculate which file the jet is in
         file_idx = int(global_idx // self.jets_per_file)
