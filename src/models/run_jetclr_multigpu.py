@@ -796,7 +796,7 @@ def main(args):
             schedule=torch.profiler.schedule(wait=3, warmup=1, active=5, repeat=1),
             on_trace_ready=tensorboard_trace_handler(writer.log_dir),
             record_shapes=False,
-            profile_memory=False,
+            profile_memory=args.profile_memory,
             with_stack=False,
         ) as prof:
             net.train()
@@ -1227,6 +1227,14 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--profile-memory",
+        type=int,
+        action="store",
+        dest="profile_memory",
+        default=0,
+        help="profile memory with pytorch profiler in training",
+    )
     parser.add_argument(
         "--pin-memory",
         type=int,
