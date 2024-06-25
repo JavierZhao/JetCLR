@@ -569,19 +569,12 @@ def main(args):
         state_dict = torch.load(
             model_load_path, map_location=lambda storage, loc: storage.cuda(rank)
         )
-        net.load_state_dict(state_dict)
 
-        # Wrap the model with DistributedDataParallel after loading the state
-        net = DDP(net, device_ids=[rank])
+        # Create a new state_dict without the 'module.' prefix
+        new_state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
 
-        # Load optimizer state if it exists
-        optimizer_load_path = expt_dir + "optimizer_last.pt"
-        if os.path.isfile(optimizer_load_path):
-            optimizer_state = torch.load(
-                optimizer_load_path,
-                map_location=lambda storage, loc: storage.cuda(rank),
-            )
-            optimizer.load_state_dict(optimizer_state)
+        # Load the adjusted state_dict into the model
+        net.load_state_dict(new_state_dict)
 
     args.device = device
     net.to(device)
@@ -598,6 +591,16 @@ def main(args):
 
     # set up the optimiser
     optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate, eps=args.eps)
+
+    if args.continue_training:
+        # Load optimizer state if it exists
+        optimizer_load_path = expt_dir + "optimizer_last.pt"
+        if os.path.isfile(optimizer_load_path):
+            optimizer_state = torch.load(
+                optimizer_load_path,
+                map_location=lambda storage, loc: storage.cuda(rank),
+            )
+            optimizer.load_state_dict(optimizer_state)
 
     # set learning rate scheduling, if required
     # SGD with cosine annealing
