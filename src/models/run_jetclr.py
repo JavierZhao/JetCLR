@@ -15,7 +15,7 @@ import copy
 import tqdm
 import gc
 from contextlib import contextmanager
-from memory_profiler import profile
+from memory_profiler import profile as mem_profile
 
 # load torch modules
 import torch
@@ -303,7 +303,7 @@ def optional_profiling(active, *args, **kwargs):
         yield None
 
 
-@profile
+@mem_profile
 def main(args):
     t0 = time.time()
 
