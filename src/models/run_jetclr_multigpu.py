@@ -467,26 +467,26 @@ def main(args):
     log_info(f"input_dim: {input_dim}")
 
     # log_info data dimensions
-    log_info(
-        "Training data shape: " + str(train_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    log_info(
-        "Validation data shape: " + str(val_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    log_info(
-        "Testing data shape: " + str(test_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    log_info(
-        "Testing labels shape: " + str(test_dataset.get_labels_shape()),
-        flush=True,
-        file=logfile,
-    )
+    # log_info(
+    #     "Training data shape: " + str(train_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # log_info(
+    #     "Validation data shape: " + str(val_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # log_info(
+    #     "Testing data shape: " + str(test_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # log_info(
+    #     "Testing labels shape: " + str(test_dataset.get_labels_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
 
     t1 = time.time()
 
@@ -766,6 +766,8 @@ def main(args):
                 np_save_checkpoint(
                     expt_dir + "average_similarities.npy", average_similarities
                 )
+            del x_i, x_j, z_i, z_j, z, similarity_matrix, sim_ij
+            gc.collect()
 
             plot_avg_cosine_similarities(args, average_similarities)
             t_cos_sim_end = time.time()
