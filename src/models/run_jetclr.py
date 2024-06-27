@@ -588,7 +588,7 @@ def main(args):
         if os.path.isfile(expt_dir + "scaler_last.pt"):
             scaler.load_state_dict(torch.load(expt_dir + "scaler_last.pt"))
 
-    profile_active = True
+    profile_active = False
     for epoch in range(args.n_epochs):
         # initialise timing stats
         te0 = time.time()
