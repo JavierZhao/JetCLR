@@ -403,26 +403,26 @@ def main(args):
     print(f"input_dim: {input_dim}")
 
     # print data dimensions
-    print(
-        "Training data shape: " + str(train_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    print(
-        "Validation data shape: " + str(val_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    print(
-        "Testing data shape: " + str(test_dataset.get_dataset_shape()),
-        flush=True,
-        file=logfile,
-    )
-    print(
-        "Testing labels shape: " + str(test_dataset.get_labels_shape()),
-        flush=True,
-        file=logfile,
-    )
+    # print(
+    #     "Training data shape: " + str(train_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # print(
+    #     "Validation data shape: " + str(val_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # print(
+    #     "Testing data shape: " + str(test_dataset.get_dataset_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # print(
+    #     "Testing labels shape: " + str(test_dataset.get_labels_shape()),
+    #     flush=True,
+    #     file=logfile,
+    # )
 
     t1 = time.time()
 
@@ -659,6 +659,9 @@ def main(args):
             # save average similarities
             if epoch != 0:
                 np.save(expt_dir + "average_similarities.npy", average_similarities)
+
+            del x_i, x_j, z_i, z_j, z, similarity_matrix, sim_ij
+            gc.collect()
 
             # plot the average cosine similarities
             plot_avg_cosine_similarities(args, average_similarities)
