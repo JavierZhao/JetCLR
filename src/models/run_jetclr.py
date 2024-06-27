@@ -975,11 +975,12 @@ def main(args):
         np.save(expt_dir + "val_losses.npy", losses_val)
 
     t2 = time.time()
-    print(
-        prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
-        flush=True,
-        file=logfile,
-    )
+    if prof is not None:
+        print(
+            prof.key_averages().table(sort_by="cuda_time_total", row_limit=20),
+            flush=True,
+            file=logfile,
+        )
 
     print(
         "JETCLR TRAINING DONE, time taken: " + str(np.round(t2 - t1, 2)),
