@@ -15,6 +15,7 @@ import copy
 import tqdm
 import gc
 from contextlib import contextmanager
+from memory_profiler import profile as mem_profile
 
 # load torch modules
 import torch
@@ -351,6 +352,7 @@ def print_data_device_info(data):
     print(f"Data device: {data.device}")
 
 
+@mem_profile
 def main(args):
     rank = args.local_rank
     torch.cuda.set_device(args.local_rank)
