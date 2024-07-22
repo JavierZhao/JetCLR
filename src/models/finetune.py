@@ -371,7 +371,7 @@ def main(args):
             load_path = (
                 f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
             )
-        if "4gpu" in args.label:
+        if "4gpu" in args.label or "8gpu" in args.label:
             # Load the original state_dict
             state_dict = torch.load(load_path)
 
