@@ -158,6 +158,8 @@ def main(args):
     expt_tag = (
         f"trial-{args.trial}-{args.ep}-{math.log10(args.num_samples)}-{args.label}"
     )
+    if args.finetune_mlp:
+        expt_tag += f"-{args.finetune_mlp}"
     if not args.finetune:
         expt_tag += "-fixed"
     if args.group_tag:
