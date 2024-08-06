@@ -115,7 +115,10 @@ def main(args):
         device = torch.device("cpu")
         print("Device: CPU", file=logfile, flush=True)
 
-    t0 = time.time()
+    # args.label = "JetClass10percent-4gpu-a100"
+    model_labels = [
+        f"trial-{i}-0-{j}.0-{args.label}" for j in range(3, 7) for i in range(10)
+    ]
     args.save_dir = (
         f"/ssl-jet-vol-v3/JetCLR/models/model_performances/finetuning/{args.label}"
     )
@@ -165,8 +168,6 @@ def main(args):
         # send network to device
         net.to(device)
 
-    load_model("best_loss")
-
     # load testing data
     data = load_data("/ssl-jet-vol-v3/toptagging", "test", 4)
     labels = load_labels("/ssl-jet-vol-v3/toptagging", "test", 4)
@@ -197,40 +198,47 @@ def main(args):
 
     softmax = torch.nn.Softmax(dim=1)
     indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
-    predicted_e = []  # store the predicted labels by batch
-    correct_e = []  # store the true labels by batch
-    net.eval()
-    proj.eval()
-    for metric in ["best_acc", "best_rej", "best_loss", "last"]:
-        load_model(metric)
-        with torch.no_grad():
-            for i, indices in enumerate(
-                tqdm(indices_list, desc="Processing", unit="batch")
-            ):
-                x = tr_dat[indices, :, :]
-                x = torch.Tensor(x).transpose(1, 2).to(args.device)
-                y = tr_lab[indices]
-                y = torch.Tensor(y).to(args.device)
-                reps = net(x, use_mask=True, use_continuous_mask=False)
-                out = proj(reps)
 
-                predicted_e.append(softmax(out).cpu().data.numpy())
-                correct_e.append(y.cpu().data)
-            predicted = np.concatenate(predicted_e)
-            target = np.concatenate(correct_e)
+    # evaluate each model
+    for label in model_labels:
+        args.label = label
+        print(f"evaluating {label}", flush=True)
+        print(f"evaluating {label}", flush=True, file=logfile)
+        predicted_e = []  # store the predicted labels by batch
+        correct_e = []  # store the true labels by batch
 
-            # get the accuracy
-            accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
-            auc, rej_50 = get_perf_stats(target, predicted[:, 1], sig=0.5)
-            auc, rej_30 = get_perf_stats(target, predicted[:, 1], sig=0.3)
-            print(
-                f"Model with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
-                file=logfile,
-                flush=True,
-            )
-            # save the predited and true labels
-            np.save(f"{args.save_dir}/predicted_{metric}.npy", predicted)
-            np.save(f"{args.save_dir}/target_{metric}.npy", target)
+        for metric in ["best_acc", "best_rej", "best_loss", "last"]:
+            load_model(metric)
+            net.eval()
+            proj.eval()
+            with torch.no_grad():
+                for i, indices in enumerate(
+                    tqdm(indices_list, desc="Processing", unit="batch")
+                ):
+                    x = tr_dat[indices, :, :]
+                    x = torch.Tensor(x).transpose(1, 2).to(args.device)
+                    y = tr_lab[indices]
+                    y = torch.Tensor(y).to(args.device)
+                    reps = net(x, use_mask=True, use_continuous_mask=False)
+                    out = proj(reps)
+
+                    predicted_e.append(softmax(out).cpu().data.numpy())
+                    correct_e.append(y.cpu().data)
+                predicted = np.concatenate(predicted_e)
+                target = np.concatenate(correct_e)
+
+                # get the accuracy
+                accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
+                auc, rej_50 = get_perf_stats(target, predicted[:, 1], sig=0.5)
+                auc, rej_30 = get_perf_stats(target, predicted[:, 1], sig=0.3)
+                print(
+                    f"{label} with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
+                    file=logfile,
+                    flush=True,
+                )
+                # save the predited and true labels
+                np.save(f"{args.save_dir}/{label}_predicted_{metric}.npy", predicted)
+                np.save(f"{args.save_dir}/{label}_target_{metric}.npy", target)
 
 
 if __name__ == "__main__":
