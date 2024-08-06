@@ -128,6 +128,7 @@ def main(args):
     print("logfile initialised", file=logfile, flush=True)
 
     input_dim = 6
+    args.n_heads = 4
     net = Transformer(
         input_dim,
         args.model_dim,
