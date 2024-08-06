@@ -208,7 +208,13 @@ def main(args):
         correct_e = []  # store the true labels by batch
 
         for metric in ["best_acc", "best_rej", "best_loss", "last"]:
-            load_model(metric)
+            try:
+                load_model(metric)
+            except:
+                print(
+                    f"Model {label} with {metric} not found", file=logfile, flush=True
+                )
+                continue
             net.eval()
             proj.eval()
             with torch.no_grad():
@@ -231,12 +237,13 @@ def main(args):
                 accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
                 auc, rej_50 = get_perf_stats(target, predicted[:, 1], sig=0.5)
                 auc, rej_30 = get_perf_stats(target, predicted[:, 1], sig=0.3)
-                print(
-                    f"{label} with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
-                    file=logfile,
-                    flush=True,
-                )
-                # save the predited and true labels
+                if auc > 0.9:
+                    print(
+                        f"{label} with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
+                        file=logfile,
+                        flush=True,
+                    )
+                    # save the predited and true labels
                 np.save(f"{args.save_dir}/{label}_predicted_{metric}.npy", predicted)
                 np.save(f"{args.save_dir}/{label}_target_{metric}.npy", target)
 
