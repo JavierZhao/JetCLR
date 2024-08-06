@@ -129,6 +129,8 @@ def main(args):
 
     input_dim = 6
     args.n_heads = 4
+    args.learning_rate = 1e-4
+    args.opt = "adam"
     net = Transformer(
         input_dim,
         args.model_dim,
