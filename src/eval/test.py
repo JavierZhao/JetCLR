@@ -115,10 +115,8 @@ def main(args):
         device = torch.device("cpu")
         print("Device: CPU", file=logfile, flush=True)
 
-    # args.label = "JetClass10percent-4gpu-a100"
-    model_labels = [
-        f"trial-{i}-0-{j}.0-{args.label}" for j in range(3, 7) for i in range(10)
-    ]
+    # args.label = "6.0-JetClass10percent-4gpu-a100"
+    model_labels = [f"trial-{i}-0-{args.label}" for i in range(10)]
     args.save_dir = (
         f"/ssl-jet-vol-v3/JetCLR/models/model_performances/finetuning/{args.label}"
     )
@@ -200,13 +198,14 @@ def main(args):
     indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
 
     # evaluate each model
+    acc_lst, rej_lst = [], []
     for label in model_labels:
         args.label = label
         print(f"evaluating {label}", flush=True)
         print(f"evaluating {label}", flush=True, file=logfile)
         predicted_e = []  # store the predicted labels by batch
         correct_e = []  # store the true labels by batch
-
+        accs_model, rejs_model = [], []
         for metric in ["best_acc", "best_rej", "best_loss", "last"]:
             try:
                 load_model(metric)
@@ -245,6 +244,25 @@ def main(args):
                 # save the predited and true labels
                 np.save(f"{args.save_dir}/{label}_predicted_{metric}.npy", predicted)
                 np.save(f"{args.save_dir}/{label}_target_{metric}.npy", target)
+                accs_model.append(accuracy)
+                rejs_model.append(rej_50)
+        acc_lst.append(max(accs_model))
+        rej_lst.append(max(rejs_model))
+    print(f"Accuracies: {acc_lst}", file=logfile, flush=True)
+    print(f"Rejections: {rej_lst}", file=logfile, flush=True)
+    # compute the mean and std
+    acc_lst = np.array(acc_lst)
+    rej_lst = np.array(rej_lst)
+    acc_mean, acc_std = np.mean(acc_lst), np.std(acc_lst)
+    rej_mean, rej_std = np.mean(rej_lst), np.std(rej_lst)
+    # remove outliers that are more than 2 std away from the mean, then recalculate the mean and std
+    acc_lst = acc_lst[abs(acc_lst - acc_mean) < 2 * acc_std]
+    rej_lst = rej_lst[abs(rej_lst - rej_mean) < 2 * rej_std]
+    acc_mean, acc_std = np.mean(acc_lst), np.std(acc_lst)
+    rej_mean, rej_std = np.mean(rej_lst), np.std(rej_lst)
+    print(f"Mean Accuracy: {acc_mean} +/- {acc_std}", file=logfile, flush=True)
+    print(f"Mean Rejection: {rej_mean} +/- {rej_std}", file=logfile, flush=True)
+    logfile.close()
 
 
 if __name__ == "__main__":
