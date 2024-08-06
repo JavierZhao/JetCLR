@@ -237,13 +237,12 @@ def main(args):
                 accuracy = accuracy_score(target, predicted[:, 1] > 0.5)
                 auc, rej_50 = get_perf_stats(target, predicted[:, 1], sig=0.5)
                 auc, rej_30 = get_perf_stats(target, predicted[:, 1], sig=0.3)
-                if auc > 0.9:
-                    print(
-                        f"{label} with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
-                        file=logfile,
-                        flush=True,
-                    )
-                    # save the predited and true labels
+                print(
+                    f"{label} with {metric}: Accuracy: {accuracy}, AUC: {auc}, rej_50: {rej_50}, rej_30: {rej_30}",
+                    file=logfile,
+                    flush=True,
+                )
+                # save the predited and true labels
                 np.save(f"{args.save_dir}/{label}_predicted_{metric}.npy", predicted)
                 np.save(f"{args.save_dir}/{label}_target_{metric}.npy", target)
 
