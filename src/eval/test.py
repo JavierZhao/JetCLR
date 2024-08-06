@@ -246,8 +246,9 @@ def main(args):
                 np.save(f"{args.save_dir}/{label}_target_{metric}.npy", target)
                 accs_model.append(accuracy)
                 rejs_model.append(rej_50)
-        acc_lst.append(max(accs_model))
-        rej_lst.append(max(rejs_model))
+        if accs_model and rejs_model:
+            acc_lst.append(max(accs_model))
+            rej_lst.append(max(rejs_model))
     print(f"Accuracies: {acc_lst}", file=logfile, flush=True)
     print(f"Rejections: {rej_lst}", file=logfile, flush=True)
     # compute the mean and std
