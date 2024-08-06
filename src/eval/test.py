@@ -145,6 +145,8 @@ def main(args):
         log=args.full_kinematics,
     )
     # initialize and load the MLP projector
+    args.finetune_mlp = ""
+    args.finetune = True
     finetune_mlp_dim = args.output_dim
     if args.finetune_mlp:
         finetune_mlp_dim = f"{args.output_dim}-{args.finetune_mlp}"
