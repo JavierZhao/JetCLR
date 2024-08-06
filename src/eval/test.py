@@ -117,7 +117,7 @@ def main(args):
 
     t0 = time.time()
     args.save_dir = (
-        f"/ssl-jet-vol-v2/JetCLR/models/model_performances/finetuning/{args.label}"
+        f"/ssl-jet-vol-v3/JetCLR/models/model_performances/finetuning/{args.label}"
     )
     os.makedirs(args.save_dir, exist_ok=True)
 
@@ -127,6 +127,7 @@ def main(args):
     args.logfile = logfile
     print("logfile initialised", file=logfile, flush=True)
 
+    input_dim = 6
     net = Transformer(
         input_dim,
         args.model_dim,
@@ -242,7 +243,7 @@ if __name__ == "__main__":
         "--dataset-path",
         type=str,
         action="store",
-        default="/ssl-jet-vol-v2/toptagging/processed",
+        default="/ssl-jet-vol-v3/toptagging/processed",
         help="Input directory with the dataset",
     )
     parser.add_argument(
