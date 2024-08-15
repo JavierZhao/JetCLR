@@ -178,6 +178,16 @@ def main(args):
     args.opt = "adam"
     args.learning_rate = 0.00005 * args.batch_size / 128
 
+    # check if experiment already exists and is not empty
+
+    if os.path.isdir(expt_dir) and os.listdir(expt_dir):
+        sys.exit(
+            "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
+        )
+    else:
+        # This will create the directory if it does not exist or if it is empty
+        os.makedirs(expt_dir, exist_ok=True)
+
     # initialise logfile
     logfile = open(args.logfile, "a")
     print("logfile initialised", file=logfile, flush=True)
@@ -195,15 +205,6 @@ def main(args):
         print("Device: CPU", file=logfile, flush=True)
     args.device = device
 
-    # check if experiment already exists and is not empty
-
-    if os.path.isdir(expt_dir) and os.listdir(expt_dir):
-        sys.exit(
-            "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
-        )
-    else:
-        # This will create the directory if it does not exist or if it is empty
-        os.makedirs(expt_dir, exist_ok=True)
     print("experiment: " + str(expt_tag), file=logfile, flush=True)
 
     # print purpose of experiment
