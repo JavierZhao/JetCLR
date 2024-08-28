@@ -1,5 +1,6 @@
 import torch
-from copy import deepcopy
+
+
 def generate_mask(x):
     """
     Generate a mask, real particle = 1, padded = 0
@@ -9,13 +10,11 @@ def generate_mask(x):
         mask: torch.Tensor of shape (batch_size, 1, num_particles)
     """
     mask = x.clone()
-    non_zero_mask = mask.any(dim=1, keepdim=True)  
-    print(non_zero_mask)
+    non_zero_mask = mask.any(dim=1, keepdim=True)  # (batch_size, 1, num_particles)
 
-    mask = non_zero_mask.int()
+    return non_zero_mask
 
-    return mask
-    
+
 def calculate_cartesian_components(input_tensor):
     # Input tensor shape: (batch_size, 6, 128)
     # Extract components
@@ -34,6 +33,8 @@ def calculate_cartesian_components(input_tensor):
     pz = pT * torch.sinh(eta)
 
     # Stack the components to form the output tensor
-    output_tensor = torch.stack([px, py, pz, E], dim=1)  # Reordering to (batch_size, 4, 128)
+    output_tensor = torch.stack(
+        [px, py, pz, E], dim=1
+    )  # Reordering to (batch_size, 4, 128)
 
     return output_tensor
