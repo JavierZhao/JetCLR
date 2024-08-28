@@ -72,8 +72,12 @@ def p3_norm(p, eps=1e-8):
 
 
 def pairwise_lv_fts(xi, xj, num_outputs=4, eps=1e-8, for_onnx=False):
-    pti, rapi, phii = to_ptrapphim(xi, False, eps=None, for_onnx=for_onnx).split((1, 1, 1), dim=1)
-    ptj, rapj, phij = to_ptrapphim(xj, False, eps=None, for_onnx=for_onnx).split((1, 1, 1), dim=1)
+    pti, rapi, phii = to_ptrapphim(xi, False, eps=None, for_onnx=for_onnx).split(
+        (1, 1, 1), dim=1
+    )
+    ptj, rapj, phij = to_ptrapphim(xj, False, eps=None, for_onnx=for_onnx).split(
+        (1, 1, 1), dim=1
+    )
 
     delta = delta_r2(rapi, phii, rapj, phij).sqrt()
     lndelta = torch.log(delta.clamp(min=eps))
@@ -81,7 +85,11 @@ def pairwise_lv_fts(xi, xj, num_outputs=4, eps=1e-8, for_onnx=False):
         return lndelta
 
     if num_outputs > 1:
-        ptmin = ((pti <= ptj) * pti + (pti > ptj) * ptj) if for_onnx else torch.minimum(pti, ptj)
+        ptmin = (
+            ((pti <= ptj) * pti + (pti > ptj) * ptj)
+            if for_onnx
+            else torch.minimum(pti, ptj)
+        )
         lnkt = torch.log((ptmin * delta).clamp(min=eps))
         lnz = torch.log((ptmin / (pti + ptj).clamp(min=eps)).clamp(min=eps))
         outputs = [lnkt, lnz, lndelta]
@@ -98,7 +106,9 @@ def pairwise_lv_fts(xi, xj, num_outputs=4, eps=1e-8, for_onnx=False):
     # the following features are not symmetric for (i, j)
     if num_outputs > 5:
         xj_boost = boost(xj, xij)
-        costheta = (p3_norm(xj_boost, eps=eps) * p3_norm(xij, eps=eps)).sum(dim=1, keepdim=True)
+        costheta = (p3_norm(xj_boost, eps=eps) * p3_norm(xij, eps=eps)).sum(
+            dim=1, keepdim=True
+        )
         outputs.append(costheta)
 
     if num_outputs > 6:
@@ -117,15 +127,23 @@ def build_sparse_tensor(uu, idx, seq_len):
     idx = torch.min(idx, torch.ones_like(idx) * seq_len)
     i = torch.cat(
         (
-            torch.arange(0, batch_size, device=uu.device).repeat_interleave(num_fts * num_pairs).unsqueeze(0),
-            torch.arange(0, num_fts, device=uu.device).repeat_interleave(num_pairs).repeat(batch_size).unsqueeze(0),
+            torch.arange(0, batch_size, device=uu.device)
+            .repeat_interleave(num_fts * num_pairs)
+            .unsqueeze(0),
+            torch.arange(0, num_fts, device=uu.device)
+            .repeat_interleave(num_pairs)
+            .repeat(batch_size)
+            .unsqueeze(0),
             idx[:, :1, :].expand_as(uu).flatten().unsqueeze(0),
             idx[:, 1:, :].expand_as(uu).flatten().unsqueeze(0),
         ),
         dim=0,
     )
     return torch.sparse_coo_tensor(
-        i, uu.flatten(), size=(batch_size, num_fts, seq_len + 1, seq_len + 1), device=uu.device
+        i,
+        uu.flatten(),
+        size=(batch_size, num_fts, seq_len + 1, seq_len + 1),
+        device=uu.device,
     ).to_dense()[:, :, :seq_len, :seq_len]
 
 
@@ -154,7 +172,8 @@ def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
 
     if (mean < a - 2 * std) or (mean > b + 2 * std):
         warnings.warn(
-            "mean is more than 2 std from [a, b] in nn.init.trunc_normal_. " "The distribution of values may be incorrect.",
+            "mean is more than 2 std from [a, b] in nn.init.trunc_normal_. "
+            "The distribution of values may be incorrect.",
             stacklevel=2,
         )
 
@@ -277,7 +296,9 @@ class PairEmbed(nn.Module):
         self.remove_self_pair = remove_self_pair
         self.mode = mode
         self.for_onnx = for_onnx
-        self.pairwise_lv_fts = partial(pairwise_lv_fts, num_outputs=pairwise_lv_dim, eps=eps, for_onnx=for_onnx)
+        self.pairwise_lv_fts = partial(
+            pairwise_lv_fts, num_outputs=pairwise_lv_dim, eps=eps, for_onnx=for_onnx
+        )
         self.out_dim = dims[-1]
 
         if self.mode == "concat":
@@ -341,7 +362,10 @@ class PairEmbed(nn.Module):
                 batch_size, _, seq_len, _ = uu.size()
             if self.is_symmetric and not self.for_onnx:
                 i, j = torch.tril_indices(
-                    seq_len, seq_len, offset=-1 if self.remove_self_pair else 0, device=(x if x is not None else uu).device
+                    seq_len,
+                    seq_len,
+                    offset=-1 if self.remove_self_pair else 0,
+                    device=(x if x is not None else uu).device,
                 )
                 if x is not None:
                     x = x.unsqueeze(-1).repeat(1, 1, 1, seq_len)
@@ -379,7 +403,14 @@ class PairEmbed(nn.Module):
                 elements = self.embed(x) + self.fts_embed(uu)
 
         if self.is_symmetric and not self.for_onnx:
-            y = torch.zeros(batch_size, self.out_dim, seq_len, seq_len, dtype=elements.dtype, device=elements.device)
+            y = torch.zeros(
+                batch_size,
+                self.out_dim,
+                seq_len,
+                seq_len,
+                dtype=elements.dtype,
+                device=elements.device,
+            )
             y[:, :, i, j] = elements
             y[:, :, j, i] = elements
         else:
@@ -427,8 +458,16 @@ class Block(nn.Module):
         self.post_fc_norm = nn.LayerNorm(self.ffn_dim) if scale_fc else None
         self.fc2 = nn.Linear(self.ffn_dim, embed_dim)
 
-        self.c_attn = nn.Parameter(torch.ones(num_heads), requires_grad=True) if scale_heads else None
-        self.w_resid = nn.Parameter(torch.ones(embed_dim), requires_grad=True) if scale_resids else None
+        self.c_attn = (
+            nn.Parameter(torch.ones(num_heads), requires_grad=True)
+            if scale_heads
+            else None
+        )
+        self.w_resid = (
+            nn.Parameter(torch.ones(embed_dim), requires_grad=True)
+            if scale_resids
+            else None
+        )
 
     def forward(self, x, x_cls=None, padding_mask=None, attn_mask=None):
         """
@@ -446,16 +485,22 @@ class Block(nn.Module):
         if x_cls is not None:
             with torch.no_grad():
                 # prepend one element for x_cls: -> (batch, 1+seq_len)
-                padding_mask = torch.cat((torch.zeros_like(padding_mask[:, :1]), padding_mask), dim=1)
+                padding_mask = torch.cat(
+                    (torch.zeros_like(padding_mask[:, :1]), padding_mask), dim=1
+                )
             # class attention: https://arxiv.org/pdf/2103.17239.pdf
             residual = x_cls
             u = torch.cat((x_cls, x), dim=0)  # (seq_len+1, batch, embed_dim)
             u = self.pre_attn_norm(u)
-            x = self.attn(x_cls, u, u, key_padding_mask=padding_mask)[0]  # (1, batch, embed_dim)
+            x = self.attn(x_cls, u, u, key_padding_mask=padding_mask)[
+                0
+            ]  # (1, batch, embed_dim)
         else:
             residual = x
             x = self.pre_attn_norm(x)
-            x = self.attn(x, x, x, key_padding_mask=padding_mask, attn_mask=attn_mask)[0]  # (seq_len, batch, embed_dim)
+            x = self.attn(x, x, x, key_padding_mask=padding_mask, attn_mask=attn_mask)[
+                0
+            ]  # (seq_len, batch, embed_dim)
 
         if self.c_attn is not None:
             tgt_len = x.size(0)
@@ -480,6 +525,8 @@ class Block(nn.Module):
         x += residual
 
         return x
+
+
 class ParticleTransformerEncoder(nn.Module):
     def __init__(
         self,
@@ -513,15 +560,23 @@ class ParticleTransformerEncoder(nn.Module):
         if block_params is not None:
             cfg_block.update(block_params)
 
-        self.embed = Embed(input_dim, embed_dims, activation=activation) if len(embed_dims) > 0 else nn.Identity()
-        self.pair_embed = PairEmbed(
-            pair_input_dim,
-            0,
-            pair_embed_dims + [cfg_block["num_heads"]],
-            remove_self_pair=True,
-            use_pre_activation_pair=True,
-            for_onnx=False,
-        ) if pair_embed_dims is not None and pair_input_dim > 0 else None
+        self.embed = (
+            Embed(input_dim, embed_dims, activation=activation)
+            if len(embed_dims) > 0
+            else nn.Identity()
+        )
+        self.pair_embed = (
+            PairEmbed(
+                pair_input_dim,
+                0,
+                pair_embed_dims + [cfg_block["num_heads"]],
+                remove_self_pair=True,
+                use_pre_activation_pair=True,
+                for_onnx=False,
+            )
+            if pair_embed_dims is not None and pair_input_dim > 0
+            else None
+        )
         self.blocks = nn.ModuleList([Block(**cfg_block) for _ in range(num_layers)])
         self.norm = nn.LayerNorm(embed_dim)
 
@@ -530,14 +585,17 @@ class ParticleTransformerEncoder(nn.Module):
         x = self.embed(x).masked_fill(~mask.permute(2, 0, 1), 0)  # (P, N, C)
         attn_mask = None
         if (v is not None or uu is not None) and self.pair_embed is not None:
-            attn_mask = self.pair_embed(v, uu).view(-1, v.size(-1), v.size(-1))  # (N*num_heads, P, P)
+            attn_mask = self.pair_embed(v, uu).view(
+                -1, v.size(-1), v.size(-1)
+            )  # (N*num_heads, P, P)
 
         for block in self.blocks:
             x = block(x, padding_mask=padding_mask, attn_mask=attn_mask)
 
         x = x.sum(dim=0)
-        x = self.norm(x)  # (P, N, C)
+        x = self.norm(x)  # (batch_size, embed_dim)
         return x
+
 
 """
 Usage of the ParticleTransformerEncoder
