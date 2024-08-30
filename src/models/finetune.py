@@ -37,8 +37,10 @@ from src.modules.jet_augs import (
     rescale_pts,
 )
 from src.modules.transformer import Transformer
-from src.modules.losses import contrastive_loss, align_loss, uniform_loss
-from src.modules.perf_eval import get_perf_stats, linear_classifier_test
+from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
+from src.modules.utils import calculate_cartesian_components, generate_mask
+from src.modules.perf_eval import get_perf_stats
+
 
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
@@ -134,7 +136,7 @@ def find_nearest(array, value):
 def get_perf_stats(labels, measures):
     measures = np.nan_to_num(measures)
     auc = metrics.roc_auc_score(labels, measures)
-    fpr, tpr, thresholds = metrics.roc_curve(labels, measures)
+    fpr, tpr, _ = metrics.roc_curve(labels, measures)
     fpr2 = [fpr[i] for i in range(len(fpr)) if tpr[i] >= 0.5]
     tpr2 = [tpr[i] for i in range(len(tpr)) if tpr[i] >= 0.5]
     try:
@@ -210,6 +212,7 @@ def main(args):
     # print purpose of experiment
     if "from_scratch" in args.label:
         print("training from scratch", file=logfile, flush=True)
+        args.finetune = 1
     print(f"finetune: {args.finetune}", file=logfile, flush=True)
 
     print("loading data")
@@ -239,8 +242,8 @@ def main(args):
     ldz_tr = list(zip(list_tr_dat, list_tr_lab))
     random.shuffle(ldz_tr)
     tr_dat, tr_lab = zip(*ldz_tr)
-    tr_dat = np.array(tr_dat)
-    tr_lab = np.array(tr_lab)
+    tr_dat = torch.tensor(tr_dat)
+    tr_lab = torch.tensor(tr_lab)
 
     # do the same with the validation dataset
     print(
@@ -260,54 +263,13 @@ def main(args):
     vl_dat = np.array(vl_dat)
     vl_lab = np.array(vl_lab)
 
-    # take out the delta_R feature
-    # if args.full_kinematics:
-    #     tr_dat = tr_dat[:, 0:6, :]
-    #     val_dat_in = val_dat_in[:, 0:6, :]
-    # input dim to the transformer -> (pt,eta,phi)
     input_dim = tr_dat.shape[1]
     print(f"input_dim: {input_dim}")
 
-    # create two testing sets:
-    # one for training the linear classifier test (LCT)
-    # and one for testing on it
-    # we will do this just with tr_dat_in, but shuffled and split 50/50
-    # this should be fine because the jetCLR training doesn't use labels
-    # we want the LCT to use S/B=1 all the time
-    list_test_dat = list(tr_dat_in.copy())
-    list_test_lab = list(tr_lab_in.copy())
-    ldz_test = list(zip(list_test_dat, list_test_lab))
-    random.shuffle(ldz_test)
-    test_dat, test_lab = zip(*ldz_test)
-    test_dat = np.array(test_dat)
-    test_lab = np.array(test_lab)
-    test_len = test_dat.shape[0]
-    test_split_len = int(test_len / 2)
-    test_dat_1 = test_dat[0:test_split_len]
-    test_lab_1 = test_lab[0:test_split_len]
-    test_dat_2 = test_dat[-test_split_len:]
-    test_lab_2 = test_lab[-test_split_len:]
-
-    # cropping all jets to a fixed number of consituents
-    # tr_dat = crop_jets(tr_dat, args.nconstit)
-    # test_dat_1 = crop_jets(test_dat_1, args.nconstit)
-    # test_dat_2 = crop_jets(test_dat_2, args.nconstit)
-
-    # reducing the testing data for consistency
-    test_cut = 50000  # 50k jets
-    test_dat_1 = test_dat_1[0:test_cut]
-    test_lab_1 = test_lab_1[0:test_cut]
-    test_dat_2 = test_dat_2[0:test_cut]
-    test_lab_2 = test_lab_2[0:test_cut]
-
     # print data dimensions
     print("training data shape: " + str(tr_dat.shape), flush=True, file=logfile)
-    print("Testing-1 data shape: " + str(test_dat_1.shape), flush=True, file=logfile)
-    print("Testing-2 data shape: " + str(test_dat_2.shape), flush=True, file=logfile)
     print("validation data shape: " + str(vl_dat.shape), flush=True, file=logfile)
     print("training labels shape: " + str(tr_lab.shape), flush=True, file=logfile)
-    print("Testing-1 labels shape: " + str(test_lab_1.shape), flush=True, file=logfile)
-    print("Testing-2 labels shape: " + str(test_lab_2.shape), flush=True, file=logfile)
     print("validation labels shape: " + str(vl_lab.shape), flush=True, file=logfile)
 
     t1 = time.time()
@@ -350,19 +312,27 @@ def main(args):
     )
     print("---------------", flush=True, file=logfile)
 
-    net = Transformer(
-        input_dim,
-        args.model_dim,
-        args.output_dim,
-        args.n_heads,
-        args.dim_feedforward,
-        args.n_layers,
-        args.learning_rate,
-        args.n_head_layers,
-        dropout=0.1,
-        opt=args.opt,
-        log=args.full_kinematics or args.six_features,
-    )
+    # initialise the network
+    if args.backbone == "vanilla":
+        net = Transformer(
+            input_dim,
+            args.model_dim,
+            args.output_dim,
+            args.n_heads,
+            args.dim_feedforward,
+            args.n_layers,
+            args.learning_rate,
+            args.n_head_layers,
+            dropout=0.1,
+            opt=args.opt,
+            log=args.full_kinematics or args.six_features,
+        )
+    elif args.backbone == "part":
+        net = ParticleTransformerEncoder(
+            input_dim=6, embed_dims=[128, 512, args.output_dim]
+        )
+    else:
+        raise ValueError("Invalid backbone (encoder) type. Choose 'vanilla' or 'part'.")
     if "from_scratch" not in args.label:
         # Load the pretrained model
         print("\nLoading the network", flush=True, file=logfile)
@@ -387,12 +357,11 @@ def main(args):
             net.load_state_dict(new_state_dict)
         else:
             net.load_state_dict(torch.load(load_path))
-        print(f"Loaded model from {load_path}", flush=True, file=logfile)
+            print(f"Loaded model from {load_path}", flush=True, file=logfile)
     # initialize the MLP projector
     finetune_mlp_dim = args.output_dim
     if args.finetune_mlp:
         finetune_mlp_dim = f"{args.output_dim}-{args.finetune_mlp}"
-
     proj = Projector(2, finetune_mlp_dim).to(args.device)
     print(f"finetune mlp: {proj}", flush=True, file=logfile)
     if args.finetune:
@@ -400,6 +369,7 @@ def main(args):
             [{"params": proj.parameters()}, {"params": net.parameters(), "lr": 1e-6}],
             lr=1e-4,
         )
+        net.train()
     else:
         net.eval()
         optimizer = optim.Adam(proj.parameters(), lr=1e-4)
@@ -434,18 +404,20 @@ def main(args):
         correct_e = []  # store the true labels by batch
 
         # the inner loop goes through the dataset batch by batch
+        proj.train()
         for i, indices in enumerate(indices_list):
-            net.optimizer.zero_grad()
-            x = tr_dat[indices, :, :]
-            x = torch.Tensor(x).transpose(1, 2).to(args.device)
-            y = tr_lab[indices]
-            y = torch.Tensor(y).to(args.device)
-            if args.finetune:
-                net.train()
-            proj.train()
-            reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
+            optimizer.zero_grad()
+            x = tr_dat[indices, :, :].to(args.device)
+            y = tr_lab[indices].to(args.device)
+            if args.backbone == "vanilla":
+                x = x.transpose(1, 2)
+                reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
+            elif args.backbone == "part":
+                v = calculate_cartesian_components(x).to(args.device)
+                mask = generate_mask(x)
+                reps = net(x.to(torch.float32), v.to(torch.float32), mask)
             out = proj(reps)
-            batch_loss = loss(out, y.long()).to(device)
+            batch_loss = loss(out, y.long()).to(args.device)
             batch_loss.backward()
             optimizer.step()
             batch_loss = batch_loss.detach().cpu().item()
@@ -459,19 +431,20 @@ def main(args):
 
         # validation
         with torch.no_grad():
+            proj.eval()
             for i, indices in enumerate(indices_list_val):
-                x = vl_dat[indices, :, :]
-                x = torch.Tensor(x).transpose(1, 2).to(args.device)
-                y = vl_lab[indices]
-                y = torch.Tensor(y).to(args.device)
-                if args.finetune:
-                    net.train()
-                proj.train()
-                reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
+                x = tr_dat[indices, :, :].to(args.device)
+                y = tr_lab[indices].to(args.device)
+                if args.backbone == "vanilla":
+                    x = x.transpose(1, 2)
+                    reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
+                elif args.backbone == "part":
+                    v = calculate_cartesian_components(x).to(args.device)
+                    mask = generate_mask(x)
+                    reps = net(x.to(torch.float32), v.to(torch.float32), mask)
                 out = proj(reps)
                 batch_loss = loss(out, y.long()).detach().cpu().item()
                 losses_e_val.append(batch_loss)
-
                 predicted_e.append(softmax(out).cpu().data.numpy())
                 correct_e.append(y.cpu().data)
             loss_e_val = np.mean(np.array(losses_e_val))
@@ -604,8 +577,18 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--backbone",
+        action="store",
+        type=str,
+        default="vanilla",
+        help="backbone of the model. vanilla: transformer encoder, part: particle transformer encoder",
+    )
+    parser.add_argument(
         "--finetune-mlp",
         default="",
+        action="store",
+        dest="finetune_mlp",
+        type=str,
         help="Size and number of layers of the MLP finetuning head following output_dim of model, e.g. 512-256-128",
     )
     parser.add_argument(
