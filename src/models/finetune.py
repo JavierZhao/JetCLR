@@ -16,6 +16,7 @@ import tqdm
 import gc
 from pathlib import Path
 import math
+from tqdm import tqdm
 
 # load torch modules
 import torch
@@ -191,6 +192,7 @@ def main(args):
         os.makedirs(expt_dir, exist_ok=True)
 
     # initialise logfile
+    os.makedirs(os.path.dirname(args.logfile), exist_ok=True)
     logfile = open(args.logfile, "a")
     print("logfile initialised", file=logfile, flush=True)
 
@@ -242,8 +244,8 @@ def main(args):
     ldz_tr = list(zip(list_tr_dat, list_tr_lab))
     random.shuffle(ldz_tr)
     tr_dat, tr_lab = zip(*ldz_tr)
-    tr_dat = torch.tensor(tr_dat)
-    tr_lab = torch.tensor(tr_lab)
+    tr_dat = torch.from_numpy(np.array(tr_dat))
+    tr_lab = torch.from_numpy(np.array(tr_lab))
 
     # do the same with the validation dataset
     print(
@@ -405,7 +407,7 @@ def main(args):
 
         # the inner loop goes through the dataset batch by batch
         proj.train()
-        for i, indices in enumerate(indices_list):
+        for i, indices in tqdm(enumerate(indices_list)):
             optimizer.zero_grad()
             x = tr_dat[indices, :, :].to(args.device)
             y = tr_lab[indices].to(args.device)
