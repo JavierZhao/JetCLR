@@ -7,12 +7,15 @@ import numpy as np
 import awkward as ak
 import uproot
 import vector
+
 vector.register_awkward()
 import torch
 import os
 import os.path as osp
 import glob
 import os
+import h5py
+
 
 def normalize(arr):
     mean = ak.mean(arr)
@@ -20,7 +23,8 @@ def normalize(arr):
     norm_arr = (arr - mean) / std
     return norm_arr, mean, std
 
-def _pad(a, maxlen, value=0, dtype='float32'):
+
+def _pad(a, maxlen, value=0, dtype="float32"):
     if isinstance(a, np.ndarray) and a.ndim >= 2 and a.shape[1] == maxlen:
         return a
     elif isinstance(a, ak.Array):
@@ -34,8 +38,9 @@ def _pad(a, maxlen, value=0, dtype='float32'):
             if not len(s):
                 continue
             trunc = s[:maxlen].astype(dtype)
-            x[idx, :len(trunc)] = trunc
+            x[idx, : len(trunc)] = trunc
         return x
+
 
 def _clip(a, a_min, a_max):
     try:
@@ -43,72 +48,103 @@ def _clip(a, a_min, a_max):
     except ValueError:
         return ak.unflatten(np.clip(ak.flatten(a), a_min, a_max), ak.num(a))
 
+
 def build_features_and_labels(tree, transform_features=True):
     # load arrays from the tree
     # Construct a Lorentz 4-vector from the (px, py, pz, energy) arrays
-    a = tree.arrays(filter_name=['part_*', 'jet_pt', 'jet_energy', 'label_*'])
-    p4 = vector.zip({'px': a['part_px'], 'py': a['part_py'], 'pz': a['part_pz'], 'energy': a['part_energy']})
+    a = tree.arrays(filter_name=["part_*", "jet_pt", "jet_energy", "label_*"])
+    p4 = vector.zip(
+        {
+            "px": a["part_px"],
+            "py": a["part_py"],
+            "pz": a["part_pz"],
+            "energy": a["part_energy"],
+        }
+    )
     jet_p4 = ak.sum(p4, axis=-1)
 
     # compute new features
-    a['part_mask'] = ak.ones_like(a['part_energy'])
-    a['part_pt'] = np.hypot(a['part_px'], a['part_py'])
-    a['part_pt_log'] = np.log(a['part_pt'])
-    a['part_e_log'] = np.log(a['part_energy'])
-    a['part_logptrel'] = np.log(a['part_pt']/a['jet_pt'])
-    a['part_logerel'] = np.log(a['part_energy']/a['jet_energy'])
-    a['part_eta'] = p4.eta
-    a['part_phi'] = p4.phi
-    a['part_deta'] = p4.eta - jet.eta
-    a['part_dphi'] = p4.phi - jet.phi
+    a["part_mask"] = ak.ones_like(a["part_energy"])
+    a["part_pt"] = np.hypot(a["part_px"], a["part_py"])
+    a["part_pt_log"] = np.log(a["part_pt"])
+    a["part_e_log"] = np.log(a["part_energy"])
+    a["part_logptrel"] = np.log(a["part_pt"] / a["jet_pt"])
+    a["part_logerel"] = np.log(a["part_energy"] / a["jet_energy"])
+    a["part_eta"] = p4.eta
+    a["part_phi"] = p4.phi
+    a["part_deta"] = p4.eta - jet_p4.eta
+    a["part_dphi"] = p4.phi - jet_p4.phi
 
     # apply standardization
     if transform_features:
-        a['part_pt_log'] = (a['part_pt_log'] - 1.7) * 0.7
-        a['part_e_log'] = (a['part_e_log'] - 2.0) * 0.7
-        a['part_logptrel'] = (a['part_logptrel'] - (-4.7)) * 0.7
-        a['part_logerel'] = (a['part_logerel'] - (-4.7)) * 0.7
+        a["part_pt_log"] = (a["part_pt_log"] - 1.7) * 0.7
+        a["part_e_log"] = (a["part_e_log"] - 2.0) * 0.7
+        a["part_logptrel"] = (a["part_logptrel"] - (-4.7)) * 0.7
+        a["part_logerel"] = (a["part_logerel"] - (-4.7)) * 0.7
 
-    if args.tag == 'JetCLR':
+    out = {}
+    if args.tag == "JetCLR":
         feature_list = {
-            'pf_features': [
-                'part_eta',
-                'part_phi',
-                'part_pt_log', 
-                'part_e_log',
-                'part_logptrel',
-                'part_logerel'
+            "pf_features": [
+                "part_eta",
+                "part_phi",
+                "part_pt_log",
+                "part_e_log",
+                "part_logptrel",
+                "part_logerel",
             ],
-            'pf_mask': ['part_mask']
+            "pf_mask": ["part_mask"],
         }
-    elif args.tag == 'JJEPA':
+
+        for k, names in feature_list.items():
+            out[k] = np.stack(
+                [_pad(a[n], maxlen=128).to_numpy() for n in names], axis=1
+            )
+
+    elif args.tag == "JJEPA":
+        out["pf_features"] = {}
+        out["pf_mask"] = {}
         feature_list = {
-            'pf_features': [
-                'part_px',
-                'part_py',
-                'part_pz',
-                'part_deta',
-                'part_dphi',
-                'part_pt_log', 
-                'part_e_log',
+            "pf_features": [
+                "part_px",
+                "part_py",
+                "part_pz",
+                "part_deta",
+                "part_dphi",
+                "part_pt_log",
+                "part_e_log",
             ],
-            'pf_mask': ['part_mask']
+            "pf_mask": ["part_mask"],
         }
+
+        stats = {"part_pt_log": [1.7, 0.58823529], "part_e_log": [2.0, 0.58823529]}
+        out["stats"] = stats
+        for k, names in feature_list.items():
+            for name in names:
+                out[k][name] = _pad(a[name], maxlen=128).to_numpy()
     else:
         raise Exception("Invalid tag. Chooese from JetCLR or JJEPA")
 
-    out = {}
-    for k, names in feature_list.items():
-        out[k] = np.stack([_pad(a[n], maxlen=128).to_numpy() for n in names], axis=1)
+    label_list = [
+        "label_QCD",
+        "label_Hbb",
+        "label_Hcc",
+        "label_Hgg",
+        "label_H4q",
+        "label_Hqql",
+        "label_Zqq",
+        "label_Wqq",
+        "label_Tbqq",
+        "label_Tbl",
+    ]
+    out["label"] = np.stack([a[n].to_numpy().astype("int") for n in label_list], axis=1)
 
-    label_list = ['label_QCD', 'label_Hbb', 'label_Hcc', 'label_Hgg', 'label_H4q', 'label_Hqql', 'label_Zqq', 'label_Wqq', 'label_Tbqq', 'label_Tbl']
-    out['label'] = np.stack([a[n].to_numpy().astype('int') for n in label_list], axis=1)
-    
     return out
 
+
 def main(args):
-    """Runs data processing scripts to turn raw data from (/ssl-jet-vol-v2/JetClass/Pythia/) into
-    cleaned data ready to be analyzed (saved in /ssl-jet-vol-v2/JetClass/processed).
+    """Runs data processing scripts to turn raw data from (/j-jepa-vol/JetClass/Pythia/) into
+    cleaned data ready to be analyzed (saved in /j-jepa-vol/JetClass/processed).
     Convert root to pt files, each containing 1M zero-padded jets cropped to 128 constituents
     Only contains kinematic features
     Shape: (100k, 7, 128)
@@ -122,24 +158,48 @@ def main(args):
         label += "_5M"
     elif label == "test":
         label += "_20M"
-    data_dir = f"/ssl-jet-vol-v2/JetClass/Pythia/{label}"
+    data_dir = f"/j-jepa-vol/JetClass/Pythia/{label}"
     data_files = glob.glob(f"{data_dir}/*")
-    label_orig = label.split("_")[0] # without _100M, _5M, _20M
-    processed_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label_orig}"
-    processed_data_dir = f"{processed_dir}/data"
-    processed_label_dir = f"{processed_dir}/label"
-    os.system(f"mkdir -p {processed_data_dir} {processed_label_dir}")  # -p: create parent dirs if needed, exist_ok
+    label_orig = label.split("_")[0]  # without _100M, _5M, _20M
+    if args.tag == "JetCLR":
+        processed_dir = f"/j-jepa-vol/JetClass/processed/{args.tag}/{label_orig}"
+        processed_data_dir = f"{processed_dir}/data"
+        processed_label_dir = f"{processed_dir}/label"
+        os.system(
+            f"mkdir -p {processed_data_dir} {processed_label_dir}"
+        )  # -p: create parent dirs if needed, exist_ok
+    elif args.tag == "JJEPA":
+        processed_dir = f"/j-jepa-vol/J-JEPA/data/JetClass/ptcl/{label_orig}"
+        os.system(
+            f"mkdir -p {processed_dir}"
+        )  # -p: create parent dirs if needed, exist_ok
 
     for i, file in enumerate(data_files):
-        tree = uproot.open(file)['tree']
+        tree = uproot.open(file)["tree"]
         file_name = file.split("/")[-1].split(".")[0]
         print(f"--- loaded data file {i} {file_name} from `{label}` directory")
         f_dict = build_features_and_labels(tree)
-        features_tensor = torch.from_numpy(f_dict['pf_features'])
-        labels_tensor = torch.from_numpy(f_dict['label'])
-        torch.save(features_tensor, osp.join(processed_data_dir, f"{file_name}.pt"))
-        torch.save(labels_tensor, osp.join(processed_label_dir, f"labels_{file_name}.pt"))
+        if args.tag == "JetCLR":
+            features_tensor = torch.from_numpy(f_dict["pf_features"])
+            labels_tensor = torch.from_numpy(f_dict["label"])
+            torch.save(features_tensor, osp.join(processed_data_dir, f"{file_name}.pt"))
+            torch.save(
+                labels_tensor, osp.join(processed_label_dir, f"labels_{file_name}.pt")
+            )
+        elif args.tag == "JJEPA":
+            with h5py.File(f"{processed_dir}/{file_name}.h5", "w") as hdf:
+                particles_group = hdf.create_group("particles")
+                for name in f_dict["pf_features"].keys():
+                    particles_group.create_dataset(
+                        name, data=f_dict["pf_features"][name]
+                    )
+                hdf.create_dataset("labels", data=f_dict["label"])
+                hdf.create_dataset("mask", data=f_dict["pf_mask"]["part_mask"])
+                stats_group = hdf.create_group("stats")
+                for name in f_dict["stats"].keys():
+                    stats_group.create_dataset(name, data=f_dict["stats"][name])
         print(f"--- saved data file {i} {file_name} to `{processed_dir}` directory")
+
 
 if __name__ == "__main__":
     log_fmt = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -167,6 +227,6 @@ if __name__ == "__main__":
         default="JetCLR",
         help="JetCLR/JJEPA",
     )
-    
+
     args = parser.parse_args()
     main(args)
