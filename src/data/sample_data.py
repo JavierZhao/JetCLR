@@ -61,16 +61,16 @@ def main(args):
         print(f"Sampling {frac}% of data from `{label}` directory")
         if args.tag == "JetCLR":
             processed_data_dir = (
-                f"/j-jepa-vol/JetClass/processed/raw/raw_{label}_{frac}%_2/data"
+                f"/j-jepa-vol/JetClass/processed/JetCLR/{frac}%/{label}/data"
             )
             processed_label_dir = (
-                f"/j-jepa-vol/JetClass/processed/raw/raw_{label}_{frac}%_2/label"
+                f"/j-jepa-vol/JetClass/processed/JetCLR/{frac}%/{label}/label"
             )
             os.system(
                 f"mkdir -p {processed_data_dir} {processed_label_dir}"
             )  # -p: create parent dirs if needed, exist_ok
 
-            data_shape = (total_samples, 7, 128)  # Example data shape
+            data_shape = (total_samples, 6, 128)  # Example data shape
             label_shape = (total_samples, 10)  # Example label shape, adjust as needed
 
             # Pre-allocate tensors
@@ -176,6 +176,10 @@ def main(args):
                     }
                     labels = hdf["labels"][:]
                     mask = hdf["mask"][:]
+                data_file_name = file.split("/")[-1].split(".")[0]
+                print(
+                    f"--- loaded data file {i} {data_file_name} from `{label}` directory"
+                )
                 # calculate number of samples to take
                 num_samples = int(frac / 100 * particles["part_px"].shape[0])
                 # generate random indices
@@ -239,7 +243,9 @@ def main(args):
                         for name in stats.keys():
                             stats_group.create_dataset(name, data=stats[name])
                     file_counter += 1
-                del particles, labels, mask, stats
+                     print(f"----finished creating {file_counter} files")
+                    
+                del particles, labels, mask
                 gc.collect()
         # Reset for the next fraction, if necessary
         current_index = 0
