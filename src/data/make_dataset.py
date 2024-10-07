@@ -14,7 +14,11 @@ import os.path as osp
 import glob
 import os
 
-
+def normalize(arr):
+    mean = ak.mean(arr)
+    std = ak.std(arr)
+    norm_arr = (arr - mean) / std
+    return norm_arr, mean, std
 
 def _pad(a, maxlen, value=0, dtype='float32'):
     if isinstance(a, np.ndarray) and a.ndim >= 2 and a.shape[1] == maxlen:
@@ -44,6 +48,7 @@ def build_features_and_labels(tree, transform_features=True):
     # Construct a Lorentz 4-vector from the (px, py, pz, energy) arrays
     a = tree.arrays(filter_name=['part_*', 'jet_pt', 'jet_energy', 'label_*'])
     p4 = vector.zip({'px': a['part_px'], 'py': a['part_py'], 'pz': a['part_pz'], 'energy': a['part_energy']})
+    jet_p4 = ak.sum(p4, axis=-1)
 
     # compute new features
     a['part_mask'] = ak.ones_like(a['part_energy'])
@@ -52,9 +57,10 @@ def build_features_and_labels(tree, transform_features=True):
     a['part_e_log'] = np.log(a['part_energy'])
     a['part_logptrel'] = np.log(a['part_pt']/a['jet_pt'])
     a['part_logerel'] = np.log(a['part_energy']/a['jet_energy'])
-    a['part_deltaR'] = np.hypot(a['part_deta'], a['part_dphi'])
     a['part_eta'] = p4.eta
     a['part_phi'] = p4.phi
+    a['part_deta'] = p4.eta - jet.eta
+    a['part_dphi'] = p4.phi - jet.phi
 
     # apply standardization
     if transform_features:
@@ -62,20 +68,34 @@ def build_features_and_labels(tree, transform_features=True):
         a['part_e_log'] = (a['part_e_log'] - 2.0) * 0.7
         a['part_logptrel'] = (a['part_logptrel'] - (-4.7)) * 0.7
         a['part_logerel'] = (a['part_logerel'] - (-4.7)) * 0.7
-        a['part_deltaR'] = (a['part_deltaR'] - 0.2) * 4.0
 
-    feature_list = {
-        'pf_features': [
-            'part_eta',
-            'part_phi',
-            'part_pt_log', 
-            'part_e_log',
-            'part_logptrel',
-            'part_logerel',
-            'part_deltaR',
-        ],
-        'pf_mask': ['part_mask']
-    }
+    if args.tag == 'JetCLR':
+        feature_list = {
+            'pf_features': [
+                'part_eta',
+                'part_phi',
+                'part_pt_log', 
+                'part_e_log',
+                'part_logptrel',
+                'part_logerel'
+            ],
+            'pf_mask': ['part_mask']
+        }
+    elif args.tag == 'JJEPA':
+        feature_list = {
+            'pf_features': [
+                'part_px',
+                'part_py',
+                'part_pz',
+                'part_deta',
+                'part_dphi',
+                'part_pt_log', 
+                'part_e_log',
+            ],
+            'pf_mask': ['part_mask']
+        }
+    else:
+        raise Exception("Invalid tag. Chooese from JetCLR or JJEPA")
 
     out = {}
     for k, names in feature_list.items():
@@ -140,5 +160,13 @@ if __name__ == "__main__":
         default="train",
         help="train/val/test",
     )
+    parser.add_argument(
+        "--tag",
+        type=str,
+        action="store",
+        default="JetCLR",
+        help="JetCLR/JJEPA",
+    )
+    
     args = parser.parse_args()
     main(args)
