@@ -243,8 +243,8 @@ def main(args):
                         for name in stats.keys():
                             stats_group.create_dataset(name, data=stats[name])
                     file_counter += 1
-                     print(f"----finished creating {file_counter} files")
-                    
+                    print(f"----finished creating {file_counter} files")
+
                 del particles, labels, mask
                 gc.collect()
         # Reset for the next fraction, if necessary
