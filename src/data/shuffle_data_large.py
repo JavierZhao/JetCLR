@@ -23,10 +23,15 @@ torch.manual_seed(42)
 np.random.seed(42)
 
 
-def get_data_file_paths(flag, percent=1):
-    data_files = glob.glob(
-        f"/j-jepa-vol/JetClass/processed/JetCLR/{percent}%/{flag}/data/*"
-    )
+def get_data_file_paths(flag, tag, percent=1):
+    if tag == "JetCLR":
+        data_files = glob.glob(
+            f"/j-jepa-vol/JetClass/processed/JetCLR/{percent}%/{flag}/data/*"
+        )
+    elif tag == "JJEPA":
+        data_files = glob.glob(
+            f"/j-jepa-vol/J-JEPA/data/JetClass/ptcl/{percent}%/{flag}/*"
+        )
     return data_files
 
 
@@ -248,6 +253,7 @@ def main(args):
     for percent in [1, 5, 10, 50, 100]:
         print(f"Processing {percent}% of data")
         data_file_paths = get_data_file_paths(flag, percent)
+        print(f"Number of files: {len(data_file_paths)}")
         if args.tag == "JetCLR":
             label_file_paths = [
                 path.replace("data/data", "label/labels") for path in data_file_paths
