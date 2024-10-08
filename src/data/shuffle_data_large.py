@@ -24,6 +24,7 @@ np.random.seed(42)
 
 
 def get_data_file_paths(flag, tag, percent=1):
+    data_files = []
     if tag == "JetCLR":
         data_files = glob.glob(
             f"/j-jepa-vol/JetClass/processed/JetCLR/{percent}%/{flag}/data/*"
