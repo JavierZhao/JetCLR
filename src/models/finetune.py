@@ -38,7 +38,7 @@ from src.modules.jet_augs import (
     rescale_pts,
 )
 from src.modules.transformer import Transformer
-from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
+from src.modules.ParT.ParticleTransformerEncoder import ParTEncoder
 from src.modules.utils import calculate_cartesian_components, generate_mask
 from src.modules.perf_eval import get_perf_stats
 
