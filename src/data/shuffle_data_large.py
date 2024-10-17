@@ -97,8 +97,8 @@ def shuffle_and_save_torch(
 
         data_content = load_data_torch(data_batch_paths)
         label_content = load_data_torch(label_batch_paths)
-        data_torch = torch.stack(data_content)
-        labels_torch = torch.stack(label_content)
+        data_torch = torch.cat(data_content)
+        labels_torch = torch.cat(label_content)
 
         # Generate shuffled indices
         jet_indices = torch.randperm(data_torch.size(0))
@@ -182,7 +182,7 @@ def save_h5_in_chunks(
         part_chunk = {
             name: np.empty((current_samples, 128)) for name in part_batch.keys()
         }
-        label_chunk = np.empty(current_samples)
+        label_chunk = np.empty((current_samples, 10))
         mask_chunk = np.empty((current_samples, 128))
 
         for name in part_batch.keys():
@@ -211,12 +211,13 @@ def save_h5_in_chunks(
 def save_tensors_in_chunks(
     data_tensor, label_tensor, save_dir_data, save_dir_label, save_indices
 ):
+    # print("shape of data tensor", data_tensor.shape)
     # Ensure the save directories exist
     os.makedirs(save_dir_data, exist_ok=True)
     os.makedirs(save_dir_label, exist_ok=True)
 
     # Calculate the number of samples per file
-    total_samples = data_tensor.size(0)
+    total_samples = data_tensor.shape[0]
     samples_per_file = 100000
     num_files = total_samples // samples_per_file
 
@@ -228,9 +229,12 @@ def save_tensors_in_chunks(
         start_index = i * samples_per_file
         # Handle the last file which might have more samples due to rounding
         end_index = (i + 1) * samples_per_file if i < num_files - 1 else total_samples
+        # print("samples_per_file", samples_per_file)
+        # print("start", start_index)
+        # print("end", end_index)
         current_samples = end_index - start_index
         # Extract the current chunk for data and labels
-        data_chunk = torch.empty((current_samples, 7, 128))
+        data_chunk = torch.empty((current_samples, 6, 128))
         label_chunk = torch.empty((current_samples, 10))
         data_chunk[:] = data_tensor[start_index:end_index]
         label_chunk[:] = label_tensor[start_index:end_index]
@@ -253,7 +257,7 @@ def main(args):
     flag = args.flag
     for percent in [1, 5, 10, 50, 100]:
         print(f"Processing {percent}% of data")
-        data_file_paths = get_data_file_paths(flag, percent)
+        data_file_paths = get_data_file_paths(flag, args.tag, percent)
         print(f"Number of files: {len(data_file_paths)}")
         if args.tag == "JetCLR":
             label_file_paths = [
