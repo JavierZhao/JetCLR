@@ -48,6 +48,9 @@ from src.modules.losses import contrastive_loss, align_loss, uniform_loss
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
 from src.modules.dataset import JetClassDataset
 
+# The Base Directory for all Saved Files (Volume)
+volume_dir = "/j-jepa-vol"
+
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
 
@@ -360,8 +363,8 @@ def main(args):
     setup(rank, args.world_size)
     t0 = time.time()
 
-    args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/JetClass/{args.person}-simCLR-{args.label}-log.txt"
-    args.save_plot_path = f"/ssl-jet-vol-v3/JetCLR/plots/cosine_similarity/{args.label}"
+    args.logfile = f"{volume_dir}/JetCLR/logs/JetClass/{args.person}-simCLR-{args.label}-log.txt"
+    args.save_plot_path = f"{volume_dir}/JetCLR/plots/cosine_similarity/{args.label}"
     args.n_heads = 4
     args.opt = "adam"
     # args.learning_rate = 0.00005 * args.batch_size / 128
@@ -402,7 +405,7 @@ def main(args):
     # args.device = device
 
     # set up results directory
-    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
+    base_dir = "{volume_dir}/JetCLR/models/"
     expt_tag = args.label
     expt_dir = base_dir + "JetClass" + expt_tag + "/"
 
@@ -425,7 +428,7 @@ def main(args):
 
     log_info("loading data")
     # Initialize JetClass custom dataset
-    dataset_path = "/ssl-jet-vol-v3/JetClass/processed/raw"
+    dataset_path = "{volume_dir}/JetClass/processed/raw"
     train_dataset = JetClassDataset(
         dataset_path,
         flag="train",
