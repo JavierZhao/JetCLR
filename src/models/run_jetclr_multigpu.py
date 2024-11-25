@@ -435,7 +435,6 @@ def main(args):
     # Initialize JetClass custom dataset
     dataset_path = "{volume_dir}/JetClass/processed/raw"
     train_dataset = JetClassDataset(
-,
         flag="train",
         args=args,
         logfile=logfile,
