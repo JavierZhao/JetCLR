@@ -30,17 +30,17 @@ class JetClassDataset(Dataset):
         self.data_dir = dataset_path
         self.load_labels = load_labels
         if args.percent == 100:
-            self.data_dir = f"{dataset_path}/raw_{flag}/shuffled/data/"
-            self.label_dir = f"{dataset_path}/raw_{flag}/shuffled/label/"
+            self.data_dir = f"{dataset_path}/shuffled/100%/{flag}/data"
+            self.label_dir = f"{dataset_path}/shuffled/100%/{flag}/label"
         else:
-            self.data_dir = f"{dataset_path}/raw_{flag}_{args.percent}%/shuffled/data/"
+            self.data_dir = f"{dataset_path}/shuffled/{args.percent}/{flag}/data"
             self.label_dir = (
-                f"{dataset_path}/raw_{flag}_{args.percent}%/shuffled/label/"
+                f"{dataset_path}/shuffled/{args.percent}/{flag}/label"
             )
         # for testing (LCT), only use the 1% dataset
         if flag == "test":
-            self.data_dir = f"{dataset_path}/raw_{flag}_1%/shuffled/data/"
-            self.label_dir = f"{dataset_path}/raw_{flag}_1%/shuffled/label/"
+            self.data_dir = f"{dataset_path}/shuffled/1%/{flag}/data"
+            self.label_dir = f"{dataset_path}/shuffled/1%/{flag}/label"
 
         # Assuming data and label files have the same naming convention
         self.data_files = sorted(
