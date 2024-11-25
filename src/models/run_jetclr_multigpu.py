@@ -433,7 +433,7 @@ def main(args):
 
     log_info("loading data")
     # Initialize JetClass custom dataset
-    dataset_path = "{volume_dir}/JetClass/JetCLR"
+    dataset_path = f"{volume_dir}/JetClass/JetCLR"
     train_dataset = JetClassDataset(
         dataset_path,
         flag="train",
