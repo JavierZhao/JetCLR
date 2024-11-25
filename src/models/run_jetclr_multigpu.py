@@ -405,7 +405,7 @@ def main(args):
     # args.device = device
 
     # set up results directory
-    base_dir = "{volume_dir}/JetCLR/models/"
+    base_dir = f"{volume_dir}/JetCLR/models/"
     expt_tag = args.label
     expt_dir = base_dir + "JetClass" + expt_tag + "/"
 
