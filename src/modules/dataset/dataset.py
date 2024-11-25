@@ -33,9 +33,9 @@ class JetClassDataset(Dataset):
             self.data_dir = f"{dataset_path}/shuffled/100%/{flag}/data"
             self.label_dir = f"{dataset_path}/shuffled/100%/{flag}/label"
         else:
-            self.data_dir = f"{dataset_path}/shuffled/{args.percent}/{flag}/data"
+            self.data_dir = f"{dataset_path}/shuffled/{args.percent}%/{flag}/data"
             self.label_dir = (
-                f"{dataset_path}/shuffled/{args.percent}/{flag}/label"
+                f"{dataset_path}/shuffled/{args.percent}%/{flag}/label"
             )
         # for testing (LCT), only use the 1% dataset
         if flag == "test":
