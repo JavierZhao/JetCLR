@@ -24,7 +24,6 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
 from torch.utils.tensorboard import SummaryWriter
 from torch.profiler import (
     profile,
@@ -47,6 +46,7 @@ sys.path.insert(0, project_root)
 from src.modules.transformer import Transformer
 from src.modules.losses import contrastive_loss, align_loss, uniform_loss
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
+from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
 from src.modules.dataset import JetClassDataset
 
 # The Base Directory for all Saved Files (Volume)
