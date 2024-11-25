@@ -24,6 +24,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, DistributedSampler
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
+from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
 from torch.utils.tensorboard import SummaryWriter
 from torch.profiler import (
     profile,
