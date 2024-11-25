@@ -354,7 +354,6 @@ def print_data_device_info(data):
     print(f"Current process device: {current_device}")
     print(f"Data device: {data.device}")
 
-
 @mem_profile
 def main(args):
     rank = args.local_rank
@@ -420,9 +419,15 @@ def main(args):
             os.makedirs(expt_dir, exist_ok=True)
     else:
         if not os.path.isdir(expt_dir) or not os.listdir(expt_dir):
-            sys.exit(
-                "ERROR: experiment does not exist or is empty, cannot continue training"
-            )
+            try:
+                # Create the directory and any necessary parent directories
+                os.makedirs(expt_dir, exist_ok=True)
+                print(f"Created experiment directory: {expt_dir}")
+            except Exception as e:
+                sys.exit(f"ERROR: Failed to create experiment directory: {e}")
+            # sys.exit(
+            #     "ERROR: experiment does not exist or is empty, cannot continue training"
+            # )
     log_info("experiment: " + str(args.label), file=logfile, flush=True)
     log_info(f"World size: {args.world_size}", file=logfile, flush=True)
 
@@ -430,7 +435,7 @@ def main(args):
     # Initialize JetClass custom dataset
     dataset_path = "{volume_dir}/JetClass/processed/raw"
     train_dataset = JetClassDataset(
-        dataset_path,
+,
         flag="train",
         args=args,
         logfile=logfile,
