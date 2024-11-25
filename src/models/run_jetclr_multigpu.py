@@ -420,15 +420,9 @@ def main(args):
             os.makedirs(expt_dir, exist_ok=True)
     else:
         if not os.path.isdir(expt_dir) or not os.listdir(expt_dir):
-            try:
-                # Create the directory and any necessary parent directories
-                os.makedirs(expt_dir, exist_ok=True)
-                print(f"Created experiment directory: {expt_dir}")
-            except Exception as e:
-                sys.exit(f"ERROR: Failed to create experiment directory: {e}")
-            # sys.exit(
-            #     "ERROR: experiment does not exist or is empty, cannot continue training"
-            # )
+            sys.exit(
+                "ERROR: experiment does not exist or is empty, cannot continue training"
+            )
     log_info("experiment: " + str(args.label), file=logfile, flush=True)
     log_info(f"World size: {args.world_size}", file=logfile, flush=True)
 
