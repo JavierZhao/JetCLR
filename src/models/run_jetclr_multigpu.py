@@ -546,7 +546,8 @@ def main(args):
 
     # initialise the network
     log_info("\ninitialising the network", flush=True, file=logfile)
-    net = Transformer(
+    if args.backbone == "vanilla":
+        net = Transformer(
         input_dim,
         args.model_dim,
         args.output_dim,
@@ -560,6 +561,13 @@ def main(args):
         log=True,
         eps=args.eps,
     )
+    elif args.backbone == "part":
+        net = ParticleTransformerEncoder(
+            input_dim=6, embed_dims=[128, 512, args.output_dim]
+        )
+    else:
+        raise ValueError("Invalid backbone (encoder) type. Choose 'vanilla' or 'part'.")
+    
 
     # Move the model to the correct device
     device = torch.device(f"cuda:{rank}")
@@ -1234,6 +1242,13 @@ if __name__ == "__main__":
     """This is executed when run from the command line"""
     parser = argparse.ArgumentParser()
     # new arguments
+    parser.add_argument(
+        "--backbone",
+        action="store",
+        type=str,
+        default="vanilla",
+        help="backbone of the model. vanilla: transformer encoder, part: particle transformer encoder",
+    )
     parser.add_argument(
         "--profile-memory",
         type=int,

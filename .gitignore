@@ -1,3 +1,6 @@
+# ignore test script
+test.sh
+
 # Ignore Mac system files
 .DS_Store
 
