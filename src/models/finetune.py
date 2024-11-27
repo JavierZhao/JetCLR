@@ -157,7 +157,7 @@ def main(args):
     print(f"use mask: {args.mask}")
     print(f"use continuous mask: {args.cmask}")
     # set up results directory
-    base_dir = "/j-jepa-vol/JetCLR/models/"
+    base_dir = "/ssl-jet-vol-v3/JetCLR/models/"
     expt_tag = (
         f"trial-{args.trial}-{args.ep}-{math.log10(args.num_samples)}-{args.label}"
     )
@@ -172,10 +172,10 @@ def main(args):
 
     if args.group_tag:
         args.logfile = (
-            f"/j-jepa-vol/JetCLR/logs/finetuning/{args.group_tag}/{expt_tag}.txt"
+            f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{args.group_tag}/{expt_tag}.txt"
         )
     else:
-        args.logfile = f"/j-jepa-vol/JetCLR/logs/finetuning/{expt_tag}.txt"
+        args.logfile = f"/ssl-jet-vol-v3/JetCLR/logs/finetuning/{expt_tag}.txt"
     args.nconstit = 50
     args.n_heads = 4
     args.opt = "adam"
@@ -219,10 +219,10 @@ def main(args):
 
     print("loading data")
     args.num_files = args.num_samples // 100000 + 1
-    data = load_data("/j-jepa-vol/toptagging", "train", args.num_files)
-    data_val = load_data("/j-jepa-vol/toptagging", "val", 1)
-    labels = load_labels("/j-jepa-vol/toptagging", "train", args.num_files)
-    labels_val = load_labels("/j-jepa-vol/toptagging", "val", 1)
+    data = load_data("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    data_val = load_data("/ssl-jet-vol-v3/toptagging", "val", 1)
+    labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
     tr_dat_in = tr_dat_in[0 : args.num_samples]
@@ -339,12 +339,12 @@ def main(args):
         # Load the pretrained model
         print("\nLoading the network", flush=True, file=logfile)
         if args.ep == -1:
-            load_path = f"/j-jepa-vol/JetCLR/models/{args.label}/final_model.pt"
+            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/final_model.pt"
         elif args.ep == 0:
-            load_path = f"//JetCLR/models/{args.label}/model_best.pt"
+            load_path = f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_best.pt"
         else:
             load_path = (
-                f"/j-jepa-vol/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
+                f"/ssl-jet-vol-v3/JetCLR/models/{args.label}/model_ep{args.ep}.pt"
             )
         if "4gpu" in args.label or "8gpu" in args.label:
             # Load the original state_dict
@@ -625,7 +625,7 @@ if __name__ == "__main__":
         "--dataset-path",
         type=str,
         action="store",
-        default="/j-jepa-vol/toptagging/processed",
+        default="/ssl-jet-vol-v3/toptagging/processed",
         help="Input directory with the dataset",
     )
     parser.add_argument(
