@@ -219,10 +219,10 @@ def main(args):
 
     print("loading data")
     args.num_files = args.num_samples // 100000 + 1
-    data = load_data("/j-jepa-vol/toptagging", "train", args.num_files)
-    data_val = load_data("/j-jepa-vol/toptagging", "val", 1)
-    labels = load_labels("/j-jepa-vol/toptagging", "train", args.num_files)
-    labels_val = load_labels("/j-jepa-vol/toptagging", "val", 1)
+    data = load_data("/j-jepa-vol/TopTagging", "train", args.num_files)
+    data_val = load_data("/j-jepa-vol/TopTagging", "val", 1)
+    labels = load_labels("/j-jepa-vol/TopTagging", "train", args.num_files)
+    labels_val = load_labels("/j-jepa-vol/TopTagging", "val", 1)
     tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
     val_dat_in = np.concatenate(data_val, axis=0)
     tr_dat_in = tr_dat_in[0 : args.num_samples]
