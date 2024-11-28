@@ -47,6 +47,8 @@ from src.modules.transformer import Transformer
 from src.modules.losses import contrastive_loss, align_loss, uniform_loss
 from src.modules.perf_eval import get_perf_stats, linear_classifier_test
 from src.modules.dataset import JetClassDataset
+from src.modules.utils import calculate_cartesian_components, generate_mask
+from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
 
 # set the number of threads that pytorch will use
 torch.set_num_threads(2)
@@ -747,8 +749,16 @@ def main(args):
                     )  # Assuming shape (batch_size, 10) for one-hot encoded labels
                     x_i, x_j = augmentation(args, batch_data)
                     batch_size = x_i.shape[0]
-                    x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                    x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    if args.backbone == "vanilla":
+                        x_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                        x_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    elif args.backbone == "part":
+                        v_i = calculate_cartesian_components(x_i).to(args.device)
+                        v_j = calculate_cartesian_components(x_j).to(args.device)
+                        mask_i = generate_mask(x_i)
+                        mask_j = generate_mask(x_j)
+                        x_i = net(x_i.to(torch.float32), v_i.to(torch.float32), mask_i)
+                        x_j = net(x_j.to(torch.float32), v_j.to(torch.float32), mask_j)
                     z_i = F.normalize(x_i, dim=1)
                     z_j = F.normalize(x_j, dim=1)
                     z = torch.cat([z_i, z_j], dim=0)
