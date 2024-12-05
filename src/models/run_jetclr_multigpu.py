@@ -154,8 +154,12 @@ def augmentation_cpu(args, x_i):
         ],
         1,
     )  # (batch_size, 6, n_constit)
-    x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
-    x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
+    if args.backbone != "part":
+        x_i = torch.Tensor(x_i).transpose(1, 2).to(args.device)
+        x_j = torch.Tensor(x_j).transpose(1, 2).to(args.device)
+    else:
+        x_i = torch.Tensor(x_i).to(args.device)
+        x_j = torch.Tensor(x_j).to(args.device) # Transposing on ParT creates a shape mismatch
     return x_i, x_j
 
 
