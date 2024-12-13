@@ -763,6 +763,11 @@ def main(args):
                         mask_j = generate_mask(x_j)
                         x_i = net(x_i.to(torch.float32), v_i.to(torch.float32), mask_i)
                         x_j = net(x_j.to(torch.float32), v_j.to(torch.float32), mask_j)
+                    else:
+                        sys.exit(
+                            "ERROR: NO SPECIFICATION FOR BACKBONE"
+                        )
+
                     z_i = F.normalize(x_i, dim=1)
                     z_j = F.normalize(x_j, dim=1)
                     z = torch.cat([z_i, z_j], dim=0)
@@ -845,8 +850,22 @@ def main(args):
                     device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
                     # with torch.autocast(device_type="cuda", enabled=False):
-                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_i = None
+                    z_j = None
+                    if args.backbone == "vanilla":
+                        z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                        z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    elif args.backbone == "part":
+                        v_i = calculate_cartesian_components(x_i).to(args.device)
+                        v_j = calculate_cartesian_components(x_j).to(args.device)
+                        mask_i = generate_mask(x_i)
+                        mask_j = generate_mask(x_j)
+                        z_i = net(x_i.to(torch.float32), v_i.to(torch.float32), mask_i)
+                        z_j = net(x_j.to(torch.float32), v_j.to(torch.float32), mask_j)
+                    else:
+                        sys.exit(
+                            "ERROR: NO SPECIFICATION FOR BACKBONE"
+                        )
                     time3 = time.time()
                     # calculate the alignment and uniformity loss for each batch
                     loss_align = align_loss(z_i, z_j)
@@ -959,8 +978,22 @@ def main(args):
                 optimizer.zero_grad(set_to_none=args.set_to_none)
                 y_i, y_j = augmentation(args, batch)
 
-                z_i = net(y_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                z_j = net(y_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                z_i = None
+                z_i = None
+                if args.backbone == "vanilla":
+                    z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
+                    z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                elif args.backbone == "part":
+                    v_i = calculate_cartesian_components(x_i).to(args.device)
+                    v_j = calculate_cartesian_components(x_j).to(args.device)
+                    mask_i = generate_mask(x_i)
+                    mask_j = generate_mask(x_j)
+                    z_i = net(x_i.to(torch.float32), v_i.to(torch.float32), mask_i)
+                    z_j = net(x_j.to(torch.float32), v_j.to(torch.float32), mask_j)
+                else:
+                    sys.exit(
+                        "ERROR: NO SPECIFICATION FOR BACKBONE"
+                    )
                 val_loss = contrastive_loss(z_i, z_j, args.temperature).to(device)
                 losses_e_val.append(val_loss.detach().cpu().numpy())
                 pbar_v.set_description(f"Validation loss: {val_loss:.4f}")
