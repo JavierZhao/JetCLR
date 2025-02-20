@@ -360,8 +360,9 @@ def print_data_device_info(data):
 
 @mem_profile
 def main(args):
-    rank = args.local_rank
-    torch.cuda.set_device(args.local_rank)
+    # rank = args.local_rank # output log told to change
+    rank = os.environ['LOCAL_RANK']
+    torch.cuda.set_device(rank)
     # Setup for DDP: initialize process group, etc.
     setup(rank, args.world_size)
     t0 = time.time()
