@@ -201,8 +201,13 @@ def main(args):
     # initialise logfile
     os.makedirs(os.path.dirname(args.logfile), exist_ok=True)
     logfile = open(args.logfile, "a")
-    print("logfile initialised", file=logfile, flush=True)
-
+    
+    if not args.from_checkpoint:
+        print("logfile initialised", file=logfile, flush=True)
+        print("output dimension: " + str(args.output_dim), file=logfile, flush=True)
+    else:
+        print("loading from checkpoint", file=logfile, flush=True)
+        
     # define the global base device
     world_size = torch.cuda.device_count()
     if world_size:
