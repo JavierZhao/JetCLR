@@ -183,10 +183,11 @@ def main(args):
 
     # check if experiment already exists and is not empty
 
-    if os.path.isdir(expt_dir) and os.listdir(expt_dir):
-        sys.exit(
-            "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
-        )
+    if not args.from_checkpoint:
+        if os.path.isdir(expt_dir) and os.listdir(expt_dir):
+            sys.exit(
+                "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
+            )
     else:
         # This will create the directory if it does not exist or if it is empty
         os.makedirs(expt_dir, exist_ok=True)
@@ -381,16 +382,34 @@ def main(args):
 
     loss = nn.CrossEntropyLoss(reduction="mean")
 
-    l_val_best = 99999
+    epoch_start = 0
+    l_val_best = 0
     acc_val_best = 0
     rej_val_best = 0
+    
+    # Load the checkpoint
+    if args.from_checkpoint:
+        checkpoint = torch.load(
+            f"{expt_dir}/last_checkpoint.pt", map_location=args.device
+        )
+
+        # Load state dictionaries
+        net.load_state_dict(checkpoint["encoder"])
+        proj.load_state_dict(checkpoint["projector"])
+        optimizer.load_state_dict(checkpoint["opt"])
+
+        # Restore additional variables
+        epoch_start = checkpoint["epoch"] + 1
+        l_val_best = checkpoint["val loss"]
+        acc_val_best = checkpoint["val acc"]
+        rej_val_best = checkpoint["val rej"]
 
     softmax = torch.nn.Softmax(dim=1)
     loss_train_all = []
     loss_val_all = []
     acc_val_all = []
 
-    for epoch in range(args.n_epochs):
+    for epoch in range(epoch_start, args.n_epochs):
         # re-batch the data on each epoch
         indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
         indices_list_val = torch.split(torch.randperm(vl_dat.shape[0]), args.batch_size)
@@ -570,6 +589,18 @@ def main(args):
             flush=True,
             file=logfile,
         )
+        
+        # save checkpoint, including optimizer state, model state, epoch, and loss
+        save_dict = {
+            "encoder": net.state_dict(),
+            "projector": proj.state_dict(),
+            "opt": optimizer.state_dict(),
+            "epoch": epoch,
+            "val loss": loss_val_all[-1],
+            "val acc": acc_val_all[-1],
+            "val rej": imtafe,
+        }
+        torch.save(save_dict, f"{expt_dir}/last_checkpoint.pt")
 
     # Training done
     print("Training done", flush=True, file=logfile)
@@ -840,6 +871,14 @@ if __name__ == "__main__":
         dest="raw_3",
         default=0,
         help="use the 3 raw features",
+    )
+    parser.add_argument(
+        "--from-checkpoint",
+        type=int,
+        action="store",
+        dest="from_checkpoint",
+        default=0,
+        help="whether to start from a checkpoint",
     )
 
     args = parser.parse_args()
