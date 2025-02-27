@@ -184,13 +184,19 @@ def main(args):
     # check if experiment already exists and is not empty
 
     if not args.from_checkpoint:
-        if os.path.isdir(expt_dir) and os.listdir(expt_dir):
-            sys.exit(
-                "ERROR: experiment already exists and is not empty, don't want to overwrite it by mistake"
-            )
-    else:
-        # This will create the directory if it does not exist or if it is empty
-        os.makedirs(expt_dir, exist_ok=True)
+        trial_num = 0
+        while True:
+            trial_dir = os.path.join(expt_dir, f"trial-{trial_num}")
+            time.sleep(random.randint(1, 4))
+            # Check if directory doesn't exist
+            if not os.path.isdir(trial_dir):
+                expt_dir = trial_dir
+                break
+
+            trial_num += 1
+
+    # Create the directory
+    os.makedirs(expt_dir, exist_ok=True)
 
     # initialise logfile
     os.makedirs(os.path.dirname(args.logfile), exist_ok=True)
@@ -383,7 +389,7 @@ def main(args):
     loss = nn.CrossEntropyLoss(reduction="mean")
 
     epoch_start = 0
-    l_val_best = 0
+    l_val_best = 99999
     acc_val_best = 0
     rej_val_best = 0
     
@@ -502,8 +508,8 @@ def main(args):
 
         # save the latest model
         if args.finetune:
-            torch.save(net.state_dict(), expt_dir + "simclr_finetune_last" + ".pt")
-        torch.save(proj.state_dict(), expt_dir + "projector_finetune_last" + ".pt")
+            torch.save(net.state_dict(), f"{expt_dir}/simclr_finetune_last.pt")
+        torch.save(proj.state_dict(), f"{expt_dir}/projector_finetune_last.pt")
 
         # save the model if lowest val loss is achieved
         if loss_val_all[-1] < l_val_best:
