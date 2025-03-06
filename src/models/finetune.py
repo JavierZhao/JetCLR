@@ -274,8 +274,8 @@ def main(args):
     ldz_test = list(zip(list_test_dat, list_test_lab))
     random.shuffle(ldz_test)
     vl_dat, vl_lab = zip(*ldz_test)
-    vl_dat = np.array(vl_dat)
-    vl_lab = np.array(vl_lab)
+    vl_dat = torch.from_numpy(np.array(vl_dat))
+    vl_lab = torch.from_numpy(np.array(vl_lab))
 
     input_dim = tr_dat.shape[1]
     print(f"input_dim: {input_dim}")
