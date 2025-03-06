@@ -465,8 +465,8 @@ def main(args):
         with torch.no_grad():
             proj.eval()
             for i, indices in enumerate(indices_list_val):
-                x = tr_dat[indices, :, :].to(args.device)
-                y = tr_lab[indices].to(args.device)
+                x = vl_dat[indices, :, :].to(args.device)
+                y = vl_lab[indices].to(args.device)
                 if args.backbone == "vanilla":
                     x = x.transpose(1, 2)
                     reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
