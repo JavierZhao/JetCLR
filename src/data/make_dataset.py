@@ -73,6 +73,9 @@ def build_features_and_labels(tree, transform_features=True):
             'part_logptrel',
             'part_logerel',
             'part_deltaR',
+            'part_px',
+            'part_py',
+            'part_pz',
         ],
         'pf_mask': ['part_mask']
     }
@@ -87,8 +90,8 @@ def build_features_and_labels(tree, transform_features=True):
     return out
 
 def main(args):
-    """Runs data processing scripts to turn raw data from (/ssl-jet-vol-v2/JetClass/Pythia/) into
-    cleaned data ready to be analyzed (saved in /ssl-jet-vol-v2/JetClass/processed).
+    """Runs data processing scripts to turn raw data from (/ssl-jet-vol-v3/JetClass/Pythia/) into
+    cleaned data ready to be analyzed (saved in /ssl-jet-vol-v3/JetClass/processed).
     Convert root to pt files, each containing 1M zero-padded jets cropped to 128 constituents
     Only contains kinematic features
     Shape: (100k, 7, 128)
@@ -102,10 +105,10 @@ def main(args):
         label += "_5M"
     elif label == "test":
         label += "_20M"
-    data_dir = f"/ssl-jet-vol-v2/JetClass/Pythia/{label}"
+    data_dir = f"/ssl-jet-vol-v3/JetClass/Pythia/{label}"
     data_files = glob.glob(f"{data_dir}/*")
     label_orig = label.split("_")[0] # without _100M, _5M, _20M
-    processed_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label_orig}"
+    processed_dir = f"/ssl-jet-vol-v3/JetClass/processed/raw/{label_orig}"
     processed_data_dir = f"{processed_dir}/data"
     processed_label_dir = f"{processed_dir}/label"
     os.system(f"mkdir -p {processed_data_dir} {processed_label_dir}")  # -p: create parent dirs if needed, exist_ok

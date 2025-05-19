@@ -33,7 +33,7 @@ else:
 
 
 def get_data_file_paths(flag, percent=1):
-    data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%/data/*")
+    data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%_3/data/*")
     if percent == 100:
         data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/{flag}/data/*")
     return data_files
@@ -60,8 +60,8 @@ def shuffle_and_save(data_file_paths, label_file_paths, save_dir_data, save_dir_
         
         data_content = load_data(data_batch_paths)
         label_content = load_data(label_batch_paths)
-        data_torch = torch.stack(data_content)
-        labels_torch = torch.stack(label_content)
+        data_torch = torch.cat(data_content, dim=0)
+        labels_torch = torch.cat(label_content, dim=0)
         
         # Seed for reproducibility
         torch.manual_seed(42)
@@ -100,7 +100,7 @@ def save_tensors_in_chunks(data_tensor, label_tensor, save_dir_data, save_dir_la
         end_index = (i + 1) * samples_per_file if i < num_files - 1 else total_samples
         
         # Extract the current chunk for data and labels
-        data_chunk = torch.empty((samples_per_file, 7, 128))
+        data_chunk = torch.empty((samples_per_file, 10, 128))
         label_chunk = torch.empty((samples_per_file, 10))
         data_chunk[:] = data_tensor[start_index:end_index]
         label_chunk[:] = label_tensor[start_index:end_index]

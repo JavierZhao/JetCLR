@@ -19,8 +19,8 @@ import gc
 
 def modify_path(path):
     """
-    Given a path for a data file, e.g. path = '/ssl-jet-vol-v2/JetClass/processed/val/data/HToBB_123.pt',
-    Constructs the path for the corresponding label file, e.g. new_path = '/ssl-jet-vol-v2/JetClass/processed/val/label/labels_HToBB_123.pt'
+    Given a path for a data file, e.g. path = '/ssl-jet-vol-v3/JetClass/processed/val/data/HToBB_123.pt',
+    Constructs the path for the corresponding label file, e.g. new_path = '/ssl-jet-vol-v3/JetClass/processed/val/label/labels_HToBB_123.pt'
     """
     # Split the string into parts
     parts = path.split("/")
@@ -45,7 +45,7 @@ def main(args):
     logger.info("making final data set from raw data")
 
     label = args.label
-    data_dir = f"/ssl-jet-vol-v2/JetClass/processed/raw/{label}"
+    data_dir = f"/ssl-jet-vol-v3/JetClass/processed/raw/{label}"
     data_files = glob.glob(f"{data_dir}/data/*")
     # frac_lst = [1, 5, 10, 50]
     frac_lst = [1]
@@ -56,17 +56,17 @@ def main(args):
         file_counter = 0
         print(f"Sampling {frac}% of data from `{label}` directory")
         processed_data_dir = (
-            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%_2/data"
+            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%_3/data"
         )
         processed_label_dir = (
-            f"/ssl-jet-vol-v2/JetClass/processed/raw/raw_{label}_{frac}%_2/label"
+            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%_3/label"
         )
         os.system(
             f"mkdir -p {processed_data_dir} {processed_label_dir}"
         )  # -p: create parent dirs if needed, exist_ok
 
         # Assuming you know the total number of samples after sampling from all files
-        data_shape = (total_samples, 7, 128)  # Example data shape
+        data_shape = (total_samples, 10, 128)  # Example data shape
         label_shape = (total_samples, 10)  # Example label shape, adjust as needed
 
         # Pre-allocate tensors
