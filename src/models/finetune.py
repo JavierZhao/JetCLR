@@ -146,7 +146,7 @@ def get_perf_stats(labels, measures):
         )
     except:
         imtafe = 1
-    return auc, imtafe
+    return auc, imtafe, fpr2, tpr2
 
 
 def main(args):
@@ -555,12 +555,12 @@ def main(args):
                 predicted,
             )
         # calculate the AUC and imtafe and output to the logfile
-        auc, imtafe = get_perf_stats(target, predicted[:, 1])
+        auc, imtafe, fpr2, tpr2 = get_perf_stats(target, predicted[:, 1])
 
         if imtafe > rej_val_best:
             print("new highest val rejection", flush=True, file=logfile)
             print(
-                f"epoch: {epoch}, AUC: {auc}, IMTAFE: {imtafe}",
+                f"epoch: {epoch}, AUC: {auc}, IMTAFE: {imtafe}, FPR: {fpr2}, TPR: {tpr2}",
                 flush=True,
                 file=logfile,
             )
