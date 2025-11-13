@@ -9,7 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
+# TODO: let's extract a tensor of shape (batch_size, 3, n_constit) 
+# from the input and pass it into these functions
+# then recalculate the rest based on the output
 def translate_jets( batch, width=1.0 ):
     '''
     Input: batch of jets, shape (batchsize, 3, n_constit)
