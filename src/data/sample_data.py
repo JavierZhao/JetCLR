@@ -56,10 +56,10 @@ def main(args):
         file_counter = 0
         print(f"Sampling {frac}% of data from `{label}` directory")
         processed_data_dir = (
-            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%_3/data"
+            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%/data"
         )
         processed_label_dir = (
-            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%_3/label"
+            f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{label}_{frac}%/label"
         )
         os.system(
             f"mkdir -p {processed_data_dir} {processed_label_dir}"

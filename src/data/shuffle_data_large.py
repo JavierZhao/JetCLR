@@ -33,7 +33,7 @@ else:
 
 
 def get_data_file_paths(flag, percent=1):
-    data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%_3/data/*")
+    data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/raw_{flag}_{percent}%/data/*")
     if percent == 100:
         data_files = glob.glob(f"/ssl-jet-vol-v3/JetClass/processed/raw/{flag}/data/*")
     return data_files
@@ -153,7 +153,7 @@ if __name__ == "__main__":
         "--percent",
         type=int,
         action="store",
-        default=5,
+        default=1,
         help="percent of data to load",
     )
     args = parser.parse_args()
