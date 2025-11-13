@@ -61,7 +61,7 @@ def boost(x, boostp4, eps=1e-8):
     b2 = p3.square().sum(dim=1, keepdim=True)
     gamma = (1 - b2).clamp(min=eps) ** (-0.5)
     gamma2 = (gamma - 1) / b2
-    gamma2.masked_fill_(b2 == 0, 0)
+    gamma2 = gamma2.masked_fill(b2 == 0, 0)
     bp = (x[:, :3] * p3).sum(dim=1, keepdim=True)
     v = x[:, :3] + gamma2 * bp * p3 + x[:, 3:] * gamma * p3
     return v
@@ -206,7 +206,7 @@ class SequenceTrimmer(nn.Module):
                     q = min(1, random.uniform(*self.target))
                     maxlen = torch.quantile(mask.type_as(x).sum(dim=-1), q).long()
                     rand = torch.rand_like(mask.type_as(x))
-                    rand.masked_fill_(~mask, -1)
+                    rand = rand.masked_fill(~mask, -1)
                     perm = rand.argsort(dim=-1, descending=True)  # (N, 1, P)
                     mask = torch.gather(mask, -1, perm)
                     x = torch.gather(x, -1, perm.expand_as(x))
@@ -355,8 +355,11 @@ class PairEmbed(nn.Module):
                 if x is not None:
                     x = self.pairwise_lv_fts(x.unsqueeze(-1), x.unsqueeze(-2))
                     if self.remove_self_pair:
-                        i = torch.arange(0, seq_len, device=x.device)
-                        x[:, :, i, i] = 0
+                        # Create a mask that zeros out diagonal elements without in-place operations
+                        batch_size_local = x.size(0)
+                        eye_mask = torch.eye(seq_len, device=x.device, dtype=x.dtype)
+                        mask = (1 - eye_mask).unsqueeze(0).unsqueeze(0).repeat(batch_size_local, self.pairwise_lv_dim, 1, 1)
+                        x = x * mask
                     x = x.view(-1, self.pairwise_lv_dim, seq_len * seq_len)
                 if uu is not None:
                     uu = uu.view(-1, self.pairwise_input_dim, seq_len * seq_len)
@@ -380,8 +383,17 @@ class PairEmbed(nn.Module):
 
         if self.is_symmetric and not self.for_onnx:
             y = torch.zeros(batch_size, self.out_dim, seq_len, seq_len, dtype=elements.dtype, device=elements.device)
-            y[:, :, i, j] = elements
-            y[:, :, j, i] = elements
+            # Create index tensors for scatter operation
+            y_flat = y.view(batch_size, self.out_dim, -1)
+            idx_ij = i * seq_len + j
+            idx_ji = j * seq_len + i
+            # Repeat indices to match the batch and channel dimensions (repeat creates copies, not views)
+            idx_ij_expanded = idx_ij.unsqueeze(0).unsqueeze(0).repeat(batch_size, self.out_dim, 1)
+            idx_ji_expanded = idx_ji.unsqueeze(0).unsqueeze(0).repeat(batch_size, self.out_dim, 1)
+            # Use scatter to fill values (non-in-place)
+            y_flat = y_flat.scatter(2, idx_ij_expanded, elements)
+            y_flat = y_flat.scatter(2, idx_ji_expanded, elements)
+            y = y_flat.view(batch_size, self.out_dim, seq_len, seq_len)
         else:
             y = elements.view(-1, self.out_dim, seq_len, seq_len)
         return y
@@ -465,7 +477,7 @@ class Block(nn.Module):
         if self.post_attn_norm is not None:
             x = self.post_attn_norm(x)
         x = self.dropout(x)
-        x += residual
+        x = x + residual
 
         residual = x
         x = self.pre_fc_norm(x)
@@ -477,7 +489,7 @@ class Block(nn.Module):
         x = self.dropout(x)
         if self.w_resid is not None:
             residual = torch.mul(self.w_resid, residual)
-        x += residual
+        x = x + residual
 
         return x
 
@@ -783,7 +795,13 @@ class ParticleTransformerTaggerWithExtraPairFeatures(nn.Module):
             v = torch.cat([pf_v, sv_v], dim=2)
             mask = torch.cat([pf_mask, sv_mask], dim=2)
             uu = torch.zeros(v.size(0), pf_uu.size(1), v.size(2), v.size(2), dtype=v.dtype, device=v.device)
-            uu[:, :, : pf_x.size(2), : pf_x.size(2)] = pf_uu
+            # Use index_put instead of in-place assignment
+            pf_size = pf_x.size(2)
+            uu = uu.index_put(
+                (slice(None), slice(None), slice(None, pf_size), slice(None, pf_size)),
+                pf_uu,
+                accumulate=False
+            )
 
         with torch.cuda.amp.autocast(enabled=self.use_amp):
             pf_x = self.pf_embed(pf_x)  # after embed: (seq_len, batch, embed_dim)

@@ -27,6 +27,7 @@ import torch.optim as optim
 
 from sklearn.metrics import accuracy_score
 from sklearn import metrics
+from src.modules.dataset import JetClassDataset
 
 
 # load custom modules required for jetCLR training
@@ -41,6 +42,8 @@ from src.modules.transformer import Transformer
 from src.modules.ParT.ParticleTransformerEncoder import ParticleTransformerEncoder
 from src.modules.utils import calculate_cartesian_components, generate_mask
 from src.modules.perf_eval import get_perf_stats
+from torch.utils.data import DataLoader, DistributedSampler
+import tqdm
 
 
 # set the number of threads that pytorch will use
@@ -74,8 +77,9 @@ def load_data(dataset_path, flag, n_files=-1):
         data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features_raw/data/*")
         path_id += "3_features_raw"
     else:
-        data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features/data/*")
-        path_id += "3_features_relative"
+        data_files = glob.glob(f"ssl-jet-vol-v3/JetClass/processed/raw/raw_test_1%/data/")
+        # data_files = glob.glob(f"{dataset_path}/{flag}/processed/3_features/data/*")
+        # path_id += "3_features_relative"
 
     data = []
     for i, _ in enumerate(data_files):
@@ -100,9 +104,14 @@ def load_data(dataset_path, flag, n_files=-1):
         else:
             data.append(
                 torch.load(
-                    f"{dataset_path}/{flag}/processed/3_features/data/data_{i}.pt"
-                ).numpy()
+                    f"ssl-jet-vol-v3/JetClass/processed/raw/raw_test_1%/data/data_{i}.pt"
+                )
             )
+            # data.append(
+            #     torch.load(
+            #         f"{dataset_path}/{flag}/processed/3_features/data/data_{i}.pt"
+            #     ).numpy()
+            # )
 
         print(f"--- loaded file {i} from `{path_id}` directory")
         if n_files != -1 and i == n_files - 1:
@@ -219,60 +228,101 @@ def main(args):
 
     print("loading data")
     args.num_files = args.num_samples // 100000 + 1
-    data = load_data("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
-    data_val = load_data("/ssl-jet-vol-v3/toptagging", "val", 1)
-    labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
-    labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
-    tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
-    val_dat_in = np.concatenate(data_val, axis=0)
-    tr_dat_in = tr_dat_in[0 : args.num_samples]
-    # reduce validation data
-    # val_dat_in = val_dat_in[0:10000]
-    tr_lab_in = np.concatenate(labels, axis=0)
-    tr_lab_in = tr_lab_in[0 : args.num_samples]
-    val_lab_in = np.concatenate(labels_val, axis=0)
-    # val_lab_in = val_lab_in[0:10000]
+    # data = load_data("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    # data_val = load_data("/ssl-jet-vol-v3/toptagging", "val", 1)
+    # labels = load_labels("/ssl-jet-vol-v3/toptagging", "train", args.num_files)
+    # labels_val = load_labels("/ssl-jet-vol-v3/toptagging", "val", 1)
+    # tr_dat_in = np.concatenate(data, axis=0)  # Concatenate along the first axis
+    # val_dat_in = np.concatenate(data_val, axis=0)
+    # tr_dat_in = tr_dat_in[0 : args.num_samples]
+    # # reduce validation data
+    # # val_dat_in = val_dat_in[0:10000]
+    # tr_lab_in = np.concatenate(labels, axis=0)
+    # tr_lab_in = tr_lab_in[0 : args.num_samples]
+    # val_lab_in = np.concatenate(labels_val, axis=0)
+    # # val_lab_in = val_lab_in[0:10000]
 
-    # creating the training dataset
-    print("shuffling data and doing the S/B split", flush=True, file=logfile)
-    tr_bkg_dat = tr_dat_in[tr_lab_in == 0].copy()
-    tr_sig_dat = tr_dat_in[tr_lab_in == 1].copy()
-    nbkg_tr = int(tr_bkg_dat.shape[0])
-    nsig_tr = int(args.sbratio * nbkg_tr)
-    list_tr_dat = list(tr_bkg_dat[0:nbkg_tr]) + list(tr_sig_dat[0:nsig_tr])
-    list_tr_lab = [0 for i in range(nbkg_tr)] + [1 for i in range(nsig_tr)]
-    ldz_tr = list(zip(list_tr_dat, list_tr_lab))
-    random.shuffle(ldz_tr)
-    tr_dat, tr_lab = zip(*ldz_tr)
-    tr_dat = torch.from_numpy(np.array(tr_dat))
-    tr_lab = torch.from_numpy(np.array(tr_lab))
+    # # creating the training dataset
+    # print("shuffling data and doing the S/B split", flush=True, file=logfile)
+    # tr_bkg_dat = tr_dat_in[tr_lab_in == 0].copy()
+    # tr_sig_dat = tr_dat_in[tr_lab_in == 1].copy()
+    # nbkg_tr = int(tr_bkg_dat.shape[0])
+    # nsig_tr = int(args.sbratio * nbkg_tr)
+    # list_tr_dat = list(tr_bkg_dat[0:nbkg_tr]) + list(tr_sig_dat[0:nsig_tr])
+    # list_tr_lab = [0 for i in range(nbkg_tr)] + [1 for i in range(nsig_tr)]
+    # ldz_tr = list(zip(list_tr_dat, list_tr_lab))
+    # random.shuffle(ldz_tr)
+    # tr_dat, tr_lab = zip(*ldz_tr)
+    # tr_dat = torch.from_numpy(np.array(tr_dat))
+    # tr_lab = torch.from_numpy(np.array(tr_lab))
 
-    # do the same with the validation dataset
-    print(
-        "shuffling data and doing the S/B split for the validation dataset",
-        flush=True,
-        file=logfile,
+    # # do the same with the validation dataset
+    # print(
+    #     "shuffling data and doing the S/B split for the validation dataset",
+    #     flush=True,
+    #     file=logfile,
+    # )
+    # vl_bkg_dat = val_dat_in[val_lab_in == 0].copy()
+    # vl_sig_dat = val_dat_in[val_lab_in == 1].copy()
+    # nbkg_vl = int(vl_bkg_dat.shape[0])
+    # nsig_vl = int(args.sbratio * nbkg_vl)
+    # list_test_dat = list(vl_bkg_dat[0:nbkg_vl]) + list(vl_sig_dat[0:nsig_vl])
+    # list_test_lab = [0 for i in range(nbkg_vl)] + [1 for i in range(nsig_vl)]
+    # ldz_test = list(zip(list_test_dat, list_test_lab))
+    # random.shuffle(ldz_test)
+    # vl_dat, vl_lab = zip(*ldz_test)
+    # vl_dat = np.array(vl_dat)
+    # vl_lab = np.array(vl_lab)
+
+    dataset_path = "/ssl-jet-vol-v3/JetClass/processed/raw"
+    args.percent = 1
+    tr_dat = JetClassDataset(
+        dataset_path,
+        flag="train",
+        args=args,
+        logfile=logfile,
+        load_labels=True,
     )
-    vl_bkg_dat = val_dat_in[val_lab_in == 0].copy()
-    vl_sig_dat = val_dat_in[val_lab_in == 1].copy()
-    nbkg_vl = int(vl_bkg_dat.shape[0])
-    nsig_vl = int(args.sbratio * nbkg_vl)
-    list_test_dat = list(vl_bkg_dat[0:nbkg_vl]) + list(vl_sig_dat[0:nsig_vl])
-    list_test_lab = [0 for i in range(nbkg_vl)] + [1 for i in range(nsig_vl)]
-    ldz_test = list(zip(list_test_dat, list_test_lab))
-    random.shuffle(ldz_test)
-    vl_dat, vl_lab = zip(*ldz_test)
-    vl_dat = np.array(vl_dat)
-    vl_lab = np.array(vl_lab)
+    vl_dat = JetClassDataset(
+        dataset_path,
+        flag="val",
+        args=args,
+        logfile=logfile,
+        load_labels=True,
+    )
+    total = int(len(tr_dat) / args.batch_size)
 
-    input_dim = tr_dat.shape[1]
-    print(f"input_dim: {input_dim}")
+    train_sampler = DistributedSampler(
+        tr_dat, num_replicas=1, rank=0
+    )
+    val_sampler = DistributedSampler(
+        vl_dat, num_replicas=1, rank=0
+    )
 
-    # print data dimensions
-    print("training data shape: " + str(tr_dat.shape), flush=True, file=logfile)
-    print("validation data shape: " + str(vl_dat.shape), flush=True, file=logfile)
-    print("training labels shape: " + str(tr_lab.shape), flush=True, file=logfile)
-    print("validation labels shape: " + str(vl_lab.shape), flush=True, file=logfile)
+    tr_dat = DataLoader(
+        tr_dat,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=0,
+        sampler=train_sampler,
+    )
+    vl_dat = DataLoader(
+        vl_dat,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=0,
+        sampler=val_sampler,
+    )
+
+    # print(f"input_dim: {input_dim}")
+
+    # # print data dimensions
+    # print("training data shape: " + str(tr_dat.shape), flush=True, file=logfile)
+    # print("validation data shape: " + str(vl_dat.shape), flush=True, file=logfile)
+    # print("training labels shape: " + str(tr_lab.shape), flush=True, file=logfile)
+    # print("validation labels shape: " + str(vl_lab.shape), flush=True, file=logfile)
 
     t1 = time.time()
 
@@ -309,9 +359,9 @@ def main(args):
     print("learning rate: " + str(args.learning_rate), flush=True, file=logfile)
     print("batch size: " + str(args.batch_size), flush=True, file=logfile)
     print("temperature: " + str(args.temperature), flush=True, file=logfile)
-    print(
-        f"Number of input features per particle: {input_dim}", flush=True, file=logfile
-    )
+    # print(
+    #     f"Number of input features per particle: {input_dim}", flush=True, file=logfile
+    # )
     print("---------------", flush=True, file=logfile)
 
     # initialise the network
@@ -392,8 +442,8 @@ def main(args):
 
     for epoch in range(args.n_epochs):
         # re-batch the data on each epoch
-        indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
-        indices_list_val = torch.split(torch.randperm(vl_dat.shape[0]), args.batch_size)
+        # indices_list = torch.split(torch.randperm(tr_dat.shape[0]), args.batch_size)
+        # indices_list_val = torch.split(torch.randperm(vl_dat.shape[0]), args.batch_size)
 
         # initialise timing stats
         te_start = time.time()
@@ -407,18 +457,34 @@ def main(args):
 
         # the inner loop goes through the dataset batch by batch
         proj.train()
-        for i, indices in tqdm(enumerate(indices_list)):
+        pbar_t = tqdm.tqdm(
+            tr_dat,
+            total=total // 10,
+            desc=f"Inference for Epoch {epoch}",
+        )
+        pbar_v = tqdm.tqdm(
+            vl_dat,
+            total=total // 10,
+            desc=f"Inference for Epoch {epoch}",
+        )
+        for i, (x, y) in enumerate(pbar_t):
+            x = x.to(args.device)
+            y = y.to(args.device)
             optimizer.zero_grad()
-            x = tr_dat[indices, :, :].to(args.device)
-            y = tr_lab[indices].to(args.device)
             if args.backbone == "vanilla":
                 x = x.transpose(1, 2)
                 reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)
             elif args.backbone == "part":
+                print("\nRUNNING WITH PART\n")
                 v = calculate_cartesian_components(x).to(args.device)
                 mask = generate_mask(x)
                 reps = net(x.to(torch.float32), v.to(torch.float32), mask)
+
+                # check if reps contains none
+                print(f"HAS NONE: {torch.isnan(reps).any()}")
+
             out = proj(reps)
+            print(f"SHAPES: OUT: {out.shape} | Y: {y.shape}")
             batch_loss = loss(out, y.long()).to(args.device)
             batch_loss.backward()
             optimizer.step()
@@ -434,9 +500,9 @@ def main(args):
         # validation
         with torch.no_grad():
             proj.eval()
-            for i, indices in enumerate(indices_list_val):
-                x = tr_dat[indices, :, :].to(args.device)
-                y = tr_lab[indices].to(args.device)
+            for i, (x, y) in enumerate(pbar_v):
+                x = x.to(args.device)
+                y = y.to(args.device)
                 if args.backbone == "vanilla":
                     x = x.transpose(1, 2)
                     reps = net(x, use_mask=args.mask, use_continuous_mask=args.cmask)

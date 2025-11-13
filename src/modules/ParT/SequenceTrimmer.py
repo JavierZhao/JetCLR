@@ -1,3 +1,4 @@
+import random
 import torch
 import torch.nn as nn
 from .utils import boost, p3_norm
@@ -26,7 +27,7 @@ class SequenceTrimmer(nn.Module):
                     q = min(1, random.uniform(*self.target))
                     maxlen = torch.quantile(mask.type_as(x).sum(dim=-1), q).long()
                     rand = torch.rand_like(mask.type_as(x))
-                    rand.masked_fill_(~mask, -1)
+                    rand = rand.masked_fill(~mask, -1)
                     perm = rand.argsort(dim=-1, descending=True)  # (N, 1, P)
                     mask = torch.gather(mask, -1, perm)
                     x = torch.gather(x, -1, perm.expand_as(x))

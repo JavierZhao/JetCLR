@@ -135,8 +135,11 @@ class PairEmbed(nn.Module):
                 if x is not None:
                     x = self.pairwise_lv_fts(x.unsqueeze(-1), x.unsqueeze(-2))
                     if self.remove_self_pair:
-                        i = torch.arange(0, seq_len, device=x.device)
-                        x[:, :, i, i] = 0
+                        # Create a mask that zeros out diagonal elements without in-place operations
+                        batch_size = x.size(0)
+                        eye_mask = torch.eye(seq_len, device=x.device, dtype=x.dtype)
+                        mask = (1 - eye_mask).unsqueeze(0).unsqueeze(0).repeat(batch_size, self.pairwise_lv_dim, 1, 1)
+                        x = x * mask
                     x = x.view(-1, self.pairwise_lv_dim, seq_len * seq_len)
                 if uu is not None:
                     uu = uu.view(-1, self.pairwise_input_dim, seq_len * seq_len)
@@ -167,8 +170,17 @@ class PairEmbed(nn.Module):
                 dtype=elements.dtype,
                 device=elements.device,
             )
-            y[:, :, i, j] = elements
-            y[:, :, j, i] = elements
+            # Create index tensors for scatter operation
+            y_flat = y.view(batch_size, self.out_dim, -1)
+            idx_ij = i * seq_len + j
+            idx_ji = j * seq_len + i
+            # Repeat indices to match the batch and channel dimensions (repeat creates copies, not views)
+            idx_ij_expanded = idx_ij.unsqueeze(0).unsqueeze(0).repeat(batch_size, self.out_dim, 1)
+            idx_ji_expanded = idx_ji.unsqueeze(0).unsqueeze(0).repeat(batch_size, self.out_dim, 1)
+            # Use scatter to fill values (non-in-place)
+            y_flat = y_flat.scatter(2, idx_ij_expanded, elements)
+            y_flat = y_flat.scatter(2, idx_ji_expanded, elements)
+            y = y_flat.view(batch_size, self.out_dim, seq_len, seq_len)
         else:
             y = elements.view(-1, self.out_dim, seq_len, seq_len)
         return y

@@ -93,7 +93,7 @@ class Block(nn.Module):
         if self.post_attn_norm is not None:
             x = self.post_attn_norm(x)
         x = self.dropout(x)
-        x += residual
+        x = x + residual
 
         residual = x
         x = self.pre_fc_norm(x)
@@ -105,6 +105,6 @@ class Block(nn.Module):
         x = self.dropout(x)
         if self.w_resid is not None:
             residual = torch.mul(self.w_resid, residual)
-        x += residual
+        x = x + residual
 
         return x

@@ -125,8 +125,10 @@ class JetClassDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
 
-        # take out the last feature (delta R)
-        sample = sample[:-1]
+        # take out deltaR (index 6), keep px, py, pz
+        # sample shape before: (10, 128) with features [eta, phi, pt_log, e_log, logptrel, logerel, deltaR, px, py, pz]
+        # sample shape after: (9, 128) with features [eta, phi, pt_log, e_log, logptrel, logerel, px, py, pz]
+        sample = torch.cat([sample[:6], sample[7:]], dim=0)
 
         if self.load_labels:
             return sample, label

@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-@torch.jit.script
 def contrastive_loss(x_i, x_j, temperature: float) -> torch.Tensor:
     if x_i.is_cuda:
         xdevice = x_i.get_device()
@@ -31,7 +30,10 @@ def contrastive_loss(x_i, x_j, temperature: float) -> torch.Tensor:
     )
     denominator = negatives_mask * torch.exp(similarity_matrix / temperature)
     denominator = denominator.to(dtype=torch.float32)
-    loss_partial = -torch.log(nominator / torch.sum(denominator, dim=1))
+    # Add epsilon for numerical stability to prevent log(0) and division by zero
+    denominator_sum = torch.sum(denominator, dim=1)
+    denominator_sum = torch.clamp(denominator_sum, min=1e-8)
+    loss_partial = -torch.log((nominator + 1e-8) / (denominator_sum + 1e-8))
     loss = torch.sum(loss_partial) / (2 * batch_size)
     return loss
 

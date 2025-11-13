@@ -59,7 +59,7 @@ def boost(x, boostp4, eps=1e-8):
     b2 = p3.square().sum(dim=1, keepdim=True)
     gamma = (1 - b2).clamp(min=eps) ** (-0.5)
     gamma2 = (gamma - 1) / b2
-    gamma2.masked_fill_(b2 == 0, 0)
+    gamma2 = gamma2.masked_fill(b2 == 0, 0)
     bp = (x[:, :3] * p3).sum(dim=1, keepdim=True)
     v = x[:, :3] + gamma2 * bp * p3 + x[:, 3:] * gamma * p3
     return v

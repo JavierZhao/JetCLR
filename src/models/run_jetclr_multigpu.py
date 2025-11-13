@@ -851,31 +851,39 @@ def main(args):
                     device_type="cuda", dtype=torch.float16, enabled=args.use_amp
                 ):
                     # with torch.autocast(device_type="cuda", enabled=False):
-                    z_i = None
-                    z_j = None
+                    # Concatenate inputs to run single forward pass (avoids BatchNorm in-place update issues)
                     if args.backbone == "vanilla":
-                        z_i = net(x_i, use_mask=args.mask, use_continuous_mask=args.cmask)
-                        z_j = net(x_j, use_mask=args.mask, use_continuous_mask=args.cmask)
+                        x_combined = torch.cat([x_i, x_j], dim=0)
+                        z_combined = net(x_combined, use_mask=args.mask, use_continuous_mask=args.cmask)
+                        batch_size_half = x_i.shape[0]
+                        z_i = z_combined[:batch_size_half]
+                        z_j = z_combined[batch_size_half:]
                     elif args.backbone == "part":
                         v_i = calculate_cartesian_components(x_i).to(args.device)
                         v_j = calculate_cartesian_components(x_j).to(args.device)
                         mask_i = generate_mask(x_i)
                         mask_j = generate_mask(x_j)
-                        z_i = net(x_i.to(torch.float32), v_i.to(torch.float32), mask_i)
-                        z_j = net(x_j.to(torch.float32), v_j.to(torch.float32), mask_j)
+                        # Concatenate inputs to run single forward pass
+                        x_combined = torch.cat([x_i, x_j], dim=0).to(torch.float32)
+                        v_combined = torch.cat([v_i, v_j], dim=0).to(torch.float32)
+                        mask_combined = torch.cat([mask_i, mask_j], dim=0)
+                        z_combined = net(x_combined, v_combined, mask_combined)
+                        batch_size_half = x_i.shape[0]
+                        z_i = z_combined[:batch_size_half]
+                        z_j = z_combined[batch_size_half:]
                     else:
                         sys.exit(
                             "ERROR: NO SPECIFICATION FOR BACKBONE"
                         )
                     time3 = time.time()
                     # calculate the alignment and uniformity loss for each batch
-                    loss_align = align_loss(z_i, z_j)
-                    loss_uniform_zi = uniform_loss(z_i)
-                    loss_uniform_zj = uniform_loss(z_j)
                     with torch.no_grad():
-                        loss_align_e.append(loss_align.detach())
+                        loss_align = align_loss(z_i.detach(), z_j.detach())
+                        loss_uniform_zi = uniform_loss(z_i.detach())
+                        loss_uniform_zj = uniform_loss(z_j.detach())
+                        loss_align_e.append(loss_align)
                         loss_uniform_e.append(
-                            (loss_uniform_zi.detach() + loss_uniform_zj.detach()) / 2
+                            (loss_uniform_zi + loss_uniform_zj) / 2
                         )
                     time4 = time.time()
 
